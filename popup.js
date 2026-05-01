@@ -1,4 +1,4 @@
-// Transcript Tool — popup controller.
+// Summary Tool — popup controller.
 // Extracts transcript on open, renders a segmented preview with clickable
 // timestamps, and exposes copy, TXT/SRT download, search filter, and a
 // "strip non-speech" toggle.
@@ -781,33 +781,63 @@ async function copySummary() {
 
 async function saveToObsidian() {
   if (!lastSummary) return;
-  const { obsVault, obsPath } = await chrome.storage.local.get(['obsVault', 'obsPath']);
+  const stored = await chrome.storage.local.get(['obsVault', 'obsPath']);
+  // Accept loose user input: surrounding quotes, backslashes, or a full
+  // absolute filesystem path. Advanced URI itself only takes a vault name +
+  // vault-relative path, so we normalise here rather than nag the user.
+  const stripQuotes = s => (s || '').trim().replace(/^['"]|['"]$/g, '').trim();
+  const obsVault = stripQuotes(stored.obsVault);
+  let obsPath = stripQuotes(stored.obsPath).replace(/\\/g, '/');
+
+  // If the field holds an absolute path, slice off everything up to and
+  // including the vault folder so what's left is vault-relative. Falls back
+  // to the basename when the vault name isn't found in the path.
+  if (obsPath.startsWith('/') && obsVault) {
+    const marker = '/' + obsVault + '/';
+    const idx = obsPath.lastIndexOf(marker);
+    obsPath = idx !== -1
+      ? obsPath.slice(idx + marker.length)
+      : (obsPath.split('/').pop() || obsPath);
+  }
+  obsPath = obsPath.replace(/^\/+/, '');
+
   if (!obsVault || !obsPath) {
     setStatus('Set Obsidian vault and file path in Settings.', 'err');
     settingsEl.open = true;
     return;
   }
 
-  // Lead with two newlines so each appended entry sits as its own block.
+  // Put the markdown on the clipboard, then have Advanced URI pull from
+  // there. Keeps the URI short (no embedded summary) — sidesteps URL-encoding
+  // and length issues that can mangle a long inline `data=` payload.
   const data = '\n\n' + buildMarkdownPayload();
-  const uri = 'obsidian://advanced-uri'
+  try {
+    await navigator.clipboard.writeText(data);
+  } catch (e) {
+    setStatus(`Clipboard write failed: ${e.message}`, 'err');
+    return;
+  }
+  const uri = 'obsidian://adv-uri'
     + `?vault=${encodeURIComponent(obsVault)}`
     + `&filepath=${encodeURIComponent(obsPath)}`
-    + `&data=${encodeURIComponent(data)}`
+    + `&clipboard=true`
     + `&mode=append`;
   triggerScheme(uri);
-  setStatus('Sent to Obsidian.', 'ok');
+  setStatus(`Sent to Obsidian (vault="${obsVault}", file="${obsPath}").`, 'ok');
 }
 
-// Hidden iframe is the popup-friendly way to invoke a custom URL scheme:
-// the OS handler picks it up but the popup doesn't unload and no blank
-// browser tab is left behind.
+// Anchor click in the popup itself. This is a top-level navigation in the
+// same user-activation tick — Chrome remembers an "Always allow" choice
+// against the popup origin, so subsequent saves dispatch silently. Tabs
+// opened via chrome.tabs.create count as fresh nav and re-prompt every time.
+// Side effect: the popup unloads as Obsidian takes focus.
 function triggerScheme(uri) {
-  const f = document.createElement('iframe');
-  f.style.display = 'none';
-  f.src = uri;
-  document.body.appendChild(f);
-  setTimeout(() => f.remove(), 1000);
+  console.log('[Summary Tool] Dispatching URI:', uri);
+  const a = document.createElement('a');
+  a.href = uri;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 async function saveToNotion() {

@@ -17,7 +17,7 @@ Do not break these without an explicit instruction:
 - **No background script / service worker.** The keyboard shortcut uses the built-in `_execute_action` command. If the popup doesn't open on the shortcut, the user has almost certainly not rebound it at `chrome://extensions/shortcuts` — Chrome drops the binding when the command name or manifest changes. Do **not** attempt workarounds with `chrome.action.openPopup()`, `chrome.windows.create()`, or any on-page banner injection; all have been tried and explicitly rejected.
 - **No content script file, no on-page banner.** Transcript extraction and video seeks both go through `chrome.scripting.executeScript` from the popup. All UI lives inside the popup window.
 - **No auto-copy, no auto-summarise.** Extraction runs automatically on popup open to populate the preview, but the clipboard write, every LLM call, and the Obsidian/Notion saves only happen on explicit button clicks.
-- **AI summary:** BYOK only — user supplies their own API key for one of six providers (DeepSeek, OpenAI, Anthropic, OpenRouter, Groq, Gemini), stored in `chrome.storage.local`. No shipped default key, no on-device LLM. Save targets are **Obsidian** (via `obsidian://advanced-uri` — needs the Advanced URI plugin) and **Notion** (via `api.notion.com` with a user-supplied integration token + page ID).
+- **AI summary:** BYOK only — user supplies their own API key for one of six providers (DeepSeek, OpenAI, Anthropic, OpenRouter, Groq, Gemini), stored in `chrome.storage.local`. No shipped default key, no on-device LLM. Save targets are **Obsidian** (via `obsidian://adv-uri` — needs the Advanced URI plugin) and **Notion** (via `api.notion.com` with a user-supplied integration token + page ID).
 - **No TypeScript, no bundler, no npm, no `package.json`, no `node_modules`, no `.gitignore`, no license.**
 - **File set:** `manifest.json`, `popup.html`, `popup.js`, `README.md`, `icon{16,48,128}.png`, and this `CLAUDE.md`. Do not add more without instruction.
 
@@ -72,7 +72,7 @@ TXT and preview share the same formatter (`buildText` → `effectiveSegments`), 
 - Transcript text is capped at 80k chars (`SUMMARY_INPUT_CAP`). System prompt asks for 5–7 plain bullets — no verdict, no rating, no headings.
 - Bullets are parsed by `parseSummaryResponse`, which strips bullet markers / numbering so the renderer applies its own list styling.
 - The shared markdown payload is `## <title>\n<youtube url>\n\n- bullet…` — used for both clipboard copy and Obsidian save.
-- Obsidian: opens `obsidian://advanced-uri?vault=…&filepath=…&data=…&mode=append` via a hidden iframe so the popup stays open. **Requires the Advanced URI community plugin** in the user's vault.
+- Obsidian: opens `obsidian://adv-uri?vault=…&filepath=…&data=…&mode=append` via `chrome.tabs.create`. **Requires the Advanced URI community plugin** in the user's vault.
 - Notion: `PATCH https://api.notion.com/v1/blocks/<page_id>/children` with one `heading_2` (title) + `paragraph` (link) + N `bulleted_list_item` blocks. Page ID is normalised (dashes stripped). Notion-Version header pinned to `2022-06-28`.
 - One-time migration on first load: any prior `deepseekKey` storage value is moved to `llmKey` with `llmProvider: 'deepseek'`.
 
