@@ -1,0 +1,621 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  /* DaisyUI "business" theme — low-key variant. Hues match Business but
+     desaturated and slightly cooler so nothing shouts. */
+  :root {
+    --primary:        #2D5278;  /* muted navy */
+    --primary-hover:  #3A6489;
+    --secondary:      #6E7E89;  /* muted slate */
+    --accent:         #C66B4D;  /* muted terracotta */
+    --base-100:       #1F2227;
+    --base-200:       #181B1F;
+    --base-300:       #121518;
+    --base-content:   #BFC4CB;
+    --base-muted:     #7A828D;
+    --border:         #2A2F36;
+    --success:        #6A9A75;  /* muted forest */
+    --error:          #A04A40;  /* muted brick */
+    --warning:        #B59052;  /* muted amber */
+    --mark-bg:        #B59052;
+    --mark-content:   #181B1F;
+    --shadow-inset:   inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  /* Light variant — same hues, lifted base. */
+  @media (prefers-color-scheme: light) {
+    :root {
+      --base-100:     #FAFAFB;
+      --base-200:     #F1F2F4;
+      --base-300:     #E4E7EB;
+      --base-content: #25292E;
+      --base-muted:   #5C6470;
+      --border:       #D5D9DE;
+      --mark-bg:      #E8D4A0;
+      --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+  }
+
+  html, body { margin: 0; }
+  body {
+    width: 420px;
+    padding: 14px 14px 12px;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: var(--base-content);
+    background: var(--base-100);
+  }
+
+  /* Header: icon + product name + (once extracted) the video title. */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  header svg { width: 24px; height: 24px; flex: none; display: block; }
+  .titles { flex: 1; min-width: 0; }
+  h1 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--base-content);
+  }
+  /* Video title under the product name, truncated to one line. */
+  .sub {
+    font-size: 11px;
+    color: var(--base-muted);
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Status line — loading, errors, success confirmations. */
+  #status {
+    margin: 0 0 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    min-height: 16px;
+    color: var(--base-muted);
+    word-break: break-word;
+  }
+  .ok  { color: var(--success); font-weight: 500; }
+  .err { color: var(--error);   font-weight: 500; }
+
+  /* Search filter, sits immediately above the preview pane. */
+  #search {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 6px;
+    padding: 6px 8px;
+    font: 12px/1.3 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: var(--base-content);
+    background: var(--base-200);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  }
+  #search:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(45, 82, 120, 0.30);
+  }
+
+  /* Segmented preview — scrollable, each row is a timestamp chip + caption text. */
+  #preview {
+    height: 160px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+    padding: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--base-content);
+    background: var(--base-200);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .seg {
+    display: flex;
+    gap: 8px;
+    padding: 2px 0;
+    align-items: baseline;
+  }
+  /* Clickable timestamp — seeks the video to that point when pressed. */
+  .seg .t {
+    flex: none;
+    padding: 1px 5px;
+    font: 600 10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--secondary);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background-color 0.1s ease, color 0.1s ease;
+  }
+  .seg .t:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary-hover);
+  }
+  .seg .txt { flex: 1; min-width: 0; word-wrap: break-word; }
+  /* When the "include timestamps" toggle is off, hide the chips. */
+  #preview.no-stamps .t { display: none; }
+
+  /* Search-match highlight. */
+  mark {
+    background: var(--mark-bg);
+    color: var(--mark-content);
+    padding: 0 1px;
+    border-radius: 2px;
+  }
+
+  /* Toggle rows for "include timestamps" and "strip non-speech". */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: var(--base-muted);
+    user-select: none;
+  }
+  .toggle-row input { margin: 0; accent-color: var(--primary); }
+
+  /* Primary action (Copy) — muted slate. Calm, utilitarian. */
+  button.primary {
+    width: 100%;
+    margin-top: 4px;
+    padding: 10px 12px;
+    font: 600 14px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: #fff;
+    background: var(--secondary);
+    border: 1px solid var(--secondary);
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: var(--shadow-inset), 0 1px 2px rgba(0, 0, 0, 0.15);
+    transition: filter 0.12s ease, transform 0.04s ease, box-shadow 0.12s ease;
+  }
+  button.primary:hover { filter: brightness(1.1); }
+  button.primary:active { transform: translateY(1px); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25); }
+
+  /* Secondary action (Summarise) — muted forest green, signals the AI feature.
+     Padding/font matched to .primary so Copy and Summarise sit at the same size. */
+  button.secondary {
+    width: 100%;
+    margin-top: 6px;
+    padding: 10px 12px;
+    font: 600 14px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: #fff;
+    background: var(--success);
+    border: 1px solid var(--success);
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: var(--shadow-inset), 0 1px 2px rgba(0, 0, 0, 0.15);
+    transition: filter 0.12s ease, transform 0.04s ease;
+  }
+  button.secondary:hover { filter: brightness(1.08); }
+  button.secondary:active { transform: translateY(1px); }
+  button.secondary:disabled { opacity: 0.55; cursor: not-allowed; filter: none; transform: none; }
+
+  /* Persisted custom-prompt line that sits beneath Summarise. Plain input,
+     no accent border — keeps the popup quiet. */
+  #extra-prompt {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 6px;
+    padding: 7px 9px;
+    font: 12px/1.3 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: var(--base-content);
+    background: var(--base-200);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  }
+  #extra-prompt::placeholder { color: var(--base-muted); }
+  #extra-prompt:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(45, 82, 120, 0.30);
+  }
+
+  /* Download chips row + diagnostic-copy button share the same chip style. */
+  .export-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--base-muted);
+  }
+  .export-row button,
+  #copy-debug {
+    padding: 5px 9px;
+    font: 500 11px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: var(--base-content);
+    background: var(--base-300);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.1s ease, border-color 0.1s ease;
+  }
+  .export-row button:hover,
+  #copy-debug:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+
+  /* Diagnostic-copy button shown only on scrape failure. */
+  #debug-row { margin: -4px 0 10px; }
+
+  /* Summary pane — appears after a successful DeepSeek call. */
+  #summary-section {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  #summary-content {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--base-content);
+    background: var(--base-200);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  #summary-content ul { margin: 0; padding-left: 18px; }
+  #summary-content li { margin-bottom: 4px; }
+
+  .summary-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .summary-actions button {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 9px;
+    font: 500 11px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: var(--base-content);
+    background: var(--base-300);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.1s ease, border-color 0.1s ease, color 0.1s ease;
+  }
+  .summary-actions button:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .summary-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--base-300);
+    color: var(--base-muted);
+  }
+
+  /* Collapsible settings — always visible (outside #controls) so users can
+     configure keys before extraction succeeds. */
+  #settings {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--base-muted);
+  }
+  #settings summary {
+    cursor: pointer;
+    user-select: none;
+    padding: 2px 0;
+    list-style: none;
+  }
+  #settings summary::-webkit-details-marker { display: none; }
+  #settings summary::before {
+    content: '▸';
+    display: inline-block;
+    width: 12px;
+    margin-right: 2px;
+    transition: transform 0.15s ease;
+  }
+  #settings[open] summary::before { transform: rotate(90deg); }
+  #settings summary:hover { color: var(--base-content); }
+
+  /* Visual category separators inside Settings. */
+  .settings-section {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .settings-section:first-of-type {
+    margin-top: 8px;
+    padding-top: 0;
+    border-top: 0;
+  }
+  .settings-heading {
+    margin: 0 0 8px;
+    font: 600 10px/1.2 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--secondary);
+  }
+
+  .settings-grid { display: grid; gap: 8px; }
+  .settings-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .settings-grid label span {
+    font-size: 11px;
+    color: var(--base-muted);
+  }
+  .settings-grid input,
+  .settings-grid select {
+    padding: 5px 7px;
+    font: 11px/1.3 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: var(--base-content);
+    background: var(--base-200);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    outline: none;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  }
+  .settings-grid input:focus,
+  .settings-grid select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(45, 82, 120, 0.30);
+  }
+  .settings-hint {
+    font-size: 10px;
+    color: var(--base-muted);
+    line-height: 1.4;
+    margin-top: 6px;
+  }
+
+  /* Per-transcript controls (toggles + downloads) tucked under the preview
+     inside the transcript disclosure. Subtle divider keeps them separate
+     from the segment list above. */
+  .transcript-controls {
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .transcript-controls .toggle-row { margin-bottom: 6px; }
+  .transcript-controls .export-row { margin-top: 8px; }
+
+  /* Collapsible transcript wrapper — visually mirrors the Settings
+     disclosure below so the two rows read as the same UI element. */
+  #transcript-pane {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--base-muted);
+  }
+  #transcript-pane > summary {
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    padding: 2px 0;
+    display: flex;
+    align-items: center;
+  }
+  #transcript-pane > summary::-webkit-details-marker { display: none; }
+  #transcript-pane > summary::before {
+    content: '▸';
+    display: inline-block;
+    width: 12px;
+    margin-right: 2px;
+    transition: transform 0.15s ease;
+  }
+  #transcript-pane[open] > summary::before { transform: rotate(90deg); }
+  #transcript-pane > summary:hover { color: var(--base-content); }
+  #transcript-pane > summary .seg-count {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--base-muted);
+  }
+
+  [hidden] { display: none !important; }
+
+  /* Shortcut display inside Settings. */
+  .shortcut-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--base-muted);
+  }
+  .shortcut-row code {
+    font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--base-content);
+  }
+  .keys { display: inline-flex; gap: 4px; }
+  kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    box-sizing: border-box;
+    font: 600 12px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: var(--base-content);
+    background: var(--base-300);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    box-shadow: var(--shadow-inset);
+  }
+</style>
+</head>
+<body>
+  <header>
+    <!-- Dark slate tile with three stacked "transcript lines" and a small
+         timestamp chip next to the top line — matches the toolbar icon. -->
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <defs>
+        <linearGradient id="slateGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#5A5A5F"/>
+          <stop offset="1" stop-color="#3A3A40"/>
+        </linearGradient>
+      </defs>
+      <rect x="1" y="1" width="46" height="46" rx="10" ry="10"
+            fill="url(#slateGrad)" stroke="#2A2A2E" stroke-width="1"/>
+      <!-- Timestamp chip, aligned with the top line. -->
+      <rect x="6.8" y="12.5" width="5" height="5" rx="1" ry="1" fill="#DDDDE1"/>
+      <!-- Three text lines of varying widths, rounded ends. -->
+      <rect x="14.4" y="12.85" width="23"   height="4.3" rx="2.15" ry="2.15" fill="#DDDDE1"/>
+      <rect x="14.4" y="21.85" width="19.2" height="4.3" rx="2.15" ry="2.15" fill="#DDDDE1"/>
+      <rect x="14.4" y="30.85" width="14.4" height="4.3" rx="2.15" ry="2.15" fill="#DDDDE1"/>
+    </svg>
+    <div class="titles">
+      <h1>Transcript Tool</h1>
+      <div id="videoTitle" class="sub" hidden></div>
+    </div>
+  </header>
+
+  <!-- Loading / error / success line. -->
+  <div id="status">Extracting transcript…</div>
+
+  <!-- On scrape failure the popup may offer a diagnostic the user can copy
+       back. Hidden unless scrapePage returned a debug payload. -->
+  <div id="debug-row" hidden>
+    <button id="copy-debug" type="button">Copy diagnostic</button>
+  </div>
+
+  <!-- 1. ACTIONS — primary buttons first so the user can act without
+       scrolling. Summary lands here, immediately under the buttons that
+       generated it. -->
+  <div id="controls" hidden>
+    <button id="copy" class="primary">Copy transcript</button>
+    <button id="summarize" class="secondary" type="button">Summarise</button>
+    <!-- Persisted extra-focus line; appended to the system prompt on every
+         Summarise click. Pressing Enter triggers Summarise. -->
+    <input id="extra-prompt" type="text" autocomplete="off" spellcheck="false"
+           placeholder="Extra focus (e.g. key takeaways for beginners)…">
+
+    <!-- Summary result — populated after a successful LLM call. -->
+    <div id="summary-section" hidden>
+      <div id="summary-content"></div>
+      <div class="summary-actions">
+        <button id="copy-summary" type="button">Copy</button>
+        <button id="save-obsidian" type="button">Save to Obsidian</button>
+        <button id="save-notion" type="button">Save to Notion</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. TRANSCRIPT — the source content + every control that shapes it
+       (search, toggles, export). Collapsible; auto-collapses after a
+       successful Summarise so the summary above takes focus. -->
+  <details id="transcript-pane" hidden>
+    <summary>
+      <span>Transcript</span>
+      <span class="seg-count" id="seg-count"></span>
+    </summary>
+    <input id="search" type="search" placeholder="Search transcript…"
+           aria-label="Search transcript">
+    <div id="preview"></div>
+    <div class="transcript-controls">
+      <label class="toggle-row">
+        <input type="checkbox" id="stamps" checked>
+        Include timestamps
+      </label>
+      <label class="toggle-row">
+        <input type="checkbox" id="stripNoise">
+        Strip [Music], [Applause], etc.
+      </label>
+      <div class="export-row">
+        <span>Download:</span>
+        <button id="dl-txt" type="button">TXT</button>
+        <button id="dl-srt" type="button">SRT</button>
+      </div>
+    </div>
+  </details>
+
+  <!-- Always-visible config so keys can be set before any extraction. -->
+  <details id="settings">
+    <summary>Settings</summary>
+
+    <div class="settings-section">
+      <h4 class="settings-heading">AI provider</h4>
+      <div class="settings-grid">
+        <label>
+          <span>Provider</span>
+          <select id="set-provider">
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic Claude</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="groq">Groq</option>
+            <option value="gemini">Google Gemini</option>
+          </select>
+        </label>
+        <label>
+          <span>Model (leave empty to use provider default)</span>
+          <input type="text" id="set-llm-model" autocomplete="off" spellcheck="false">
+        </label>
+        <label>
+          <span>API key</span>
+          <input type="password" id="set-llm-key" autocomplete="off" spellcheck="false">
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h4 class="settings-heading">Save to Obsidian</h4>
+      <div class="settings-grid">
+        <label>
+          <span>Vault name</span>
+          <input type="text" id="set-obs-vault" autocomplete="off" spellcheck="false">
+        </label>
+        <label>
+          <span>File path (e.g. Inbox/YouTube.md)</span>
+          <input type="text" id="set-obs-path" autocomplete="off" spellcheck="false">
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h4 class="settings-heading">Save to Notion</h4>
+      <div class="settings-grid">
+        <label>
+          <span>Integration token</span>
+          <input type="password" id="set-notion-token" autocomplete="off" spellcheck="false">
+        </label>
+        <label>
+          <span>Page ID (32-char id from the page URL)</span>
+          <input type="text" id="set-notion-page" autocomplete="off" spellcheck="false">
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h4 class="settings-heading">Keyboard shortcut</h4>
+      <div class="shortcut-row">
+        <span class="keys">
+          <kbd>&#8984;</kbd>
+          <kbd>&#8679;</kbd>
+          <kbd>O</kbd>
+        </span>
+        <span>Toggle popup</span>
+      </div>
+      <div class="settings-hint" style="margin-top: 4px;">
+        Rebind at <code>chrome://extensions/shortcuts</code>.
+      </div>
+    </div>
+
+    <div class="settings-hint">
+      Obsidian append needs the <strong>Advanced URI</strong> community plugin.
+      Notion needs an integration shared with the target page.
+      All values are stored locally; nothing syncs.
+    </div>
+  </details>
+
+  <script src="popup.js"></script>
+</body>
+</html>
