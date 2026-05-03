@@ -547,7 +547,7 @@ const SUMMARY_INPUT_CAP = 80000;
 const SUMMARY_SYSTEM_PROMPT =
   'You summarise YouTube video transcripts.\n\n' +
   'Output 5–7 concise bullet points covering the main topics, each prefixed with "- ".\n' +
-  'Where a bullet refers to a specific moment in the video, end the bullet with the timestamp in square brackets, e.g. "[2:45]" or "[1:12:30]". Use timestamps that appear in the supplied transcript only — never invent or guess.\n' +
+  'Where a bullet refers to a specific moment in the video, end the bullet with the timestamp in square brackets, e.g. "[2:45]" or "[1:12:30]". A range is fine if the bullet covers a span: "[1:52–3:23]". Use timestamps that appear in the supplied transcript only — never invent or guess.\n' +
   'No preamble, no closing remarks, no headings, no extra blank lines.';
 
 // Page-mode counterpart. Same shape (5–7 bullets) so the renderer + save
@@ -830,11 +830,14 @@ function parseSummaryResponse(text) {
     .filter(Boolean);
 }
 
-// Matches a bare timestamp wrapped in square brackets — m:ss, mm:ss, h:mm:ss
-// or hh:mm:ss. Used to swap "[2:45]" tokens in summary bullets for clickable
-// chips that seek the video. Kept tight so we don't accidentally chip-ify
-// arbitrary bracketed text the model emits (e.g. "[Music]").
-const SUMMARY_STAMP_RE = /\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g;
+// Matches a timestamp (or timestamp range) wrapped in square brackets.
+// Single: [2:45], [1:12:30]. Range: [1:52–3:23], [1:52-3:23], [1:52 — 3:23]
+// (any of hyphen, en-dash, em-dash, optional whitespace). Capture groups:
+//   m[1] = inner text to display on the chip (e.g. "1:52–3:23")
+//   m[2] = start timestamp the chip seeks to (e.g. "1:52")
+// Kept brackets-only so we don't accidentally chip-ify "[Music]" or random
+// bracketed prose the model emits.
+const SUMMARY_STAMP_RE = /\[((\d{1,2}:\d{2}(?::\d{2})?)(?:\s*[–—-]\s*\d{1,2}:\d{2}(?::\d{2})?)?)\]/g;
 
 function renderSummary(text, { meta } = {}) {
   const bullets = parseSummaryResponse(text);
@@ -884,14 +887,15 @@ function appendBulletWithStamps(li, text) {
     if (m.index > lastIdx) {
       li.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
     }
-    const stamp = m[1];
-    const sec = parseStamp(stamp);
-    const validRange = sec > 0 && (durSec === 0 || sec <= durSec);
+    const display = m[1];     // "1:52" or "1:52–3:23" — what the chip shows
+    const startStamp = m[2];  // "1:52" — what we seek to
+    const sec = parseStamp(startStamp);
+    const validRange = sec >= 0 && (durSec === 0 || sec <= durSec);
     if (canChip && validRange) {
       const btn = document.createElement('button');
       btn.className = 't';
       btn.type = 'button';
-      btn.textContent = stamp;
+      btn.textContent = display;
       btn.dataset.sec = String(sec);
       btn.title = 'Jump to this point in the video';
       li.appendChild(btn);
