@@ -392,6 +392,10 @@ async function seekVideo(seconds) {
         const player = document.getElementById('movie_player');
         if (player && typeof player.seekTo === 'function') {
           player.seekTo(t, true);
+          // Resume playback if the video is paused/cued/unstarted. State codes:
+          // -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued.
+          // playVideo() on an already-playing video is a no-op.
+          if (typeof player.playVideo === 'function') player.playVideo();
           return;
         }
         const v = document.querySelector('video.html5-main-video') || document.querySelector('video');
