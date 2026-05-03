@@ -379,6 +379,9 @@ previewEl.addEventListener('click', (e) => {
   if (!t) return;
   const sec = Number(t.dataset.sec);
   if (Number.isFinite(sec)) seekVideo(sec);
+  // Blur so focus returns to <body>; otherwise the focused chip would
+  // swallow subsequent spacebar presses (which should toggle play/pause).
+  t.blur();
 });
 
 // Toggle play/pause on the active YouTube tab without stealing focus from
@@ -972,6 +975,9 @@ summaryContent.addEventListener('click', (e) => {
   if (!t) return;
   const sec = Number(t.dataset.sec);
   if (Number.isFinite(sec)) seekVideo(sec);
+  // Same reason as the preview-chip handler — blur so spacebar afterwards
+  // toggles play/pause instead of re-seeking the focused chip.
+  t.blur();
 });
 
 // Markdown payload for clipboard + Obsidian. Format: title, YouTube link, bullets.
