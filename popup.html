@@ -281,6 +281,14 @@
   }
   #summary-content ul { margin: 0; padding-left: 18px; }
   #summary-content li { margin-bottom: 4px; }
+  /* Direct-answer paragraph rendered above the bullets when the user
+     supplied an "Extra focus" request and the model answered it inline. */
+  .summary-prefix {
+    margin: 0 0 8px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--base-content);
+  }
   /* Inline timestamp chips inside summary bullets — same look as preview
      chips (.seg .t) but flow inline with surrounding text. Click seeks
      the video via the same delegated handler. */

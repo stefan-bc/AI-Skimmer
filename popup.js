@@ -717,7 +717,7 @@ async function summarise() {
     // Live extra-prompt input wins so unblurred edits aren't lost.
     const extra = (extraPromptEl.value || stored.extraPrompt || '').trim();
     const systemContent = extra
-      ? `${systemBase}\n\nThe user has additional priorities. Address them directly in one of the bullets:\n"${extra}"`
+      ? `${systemBase}\n\nThe user added a specific request: "${extra}"\nBefore the bullet points, write a brief 2–3 sentence direct answer to that request as plain prose (no bullet markers, no heading). Then output the bullets as instructed above.`
       : systemBase;
 
     setStatus(truncated
@@ -924,15 +924,24 @@ async function* parseSSE(body, extractText) {
   }
 }
 
-// Pull bullet lines out of the model response, stripping bullet markers /
-// numbering so the renderer can apply its own list styling.
+// Split the model response into an optional prose prefix and the bullet list.
+// Lines that start with a bullet marker / numbered list go into bullets;
+// everything before the first such line becomes the prefix paragraph (used
+// when the user added an "Extra focus" request and we asked the model to
+// answer it briefly before the bullets). Bullet markers are stripped so the
+// renderer applies its own list styling.
+const BULLET_LINE_RE = /^[-*•]\s+|^\d+[.)]\s+/;
 function parseSummaryResponse(text) {
-  return text
-    .split('\n')
-    .map(l => l.trim())
+  const lines = text.split('\n').map(l => l.trim());
+  const firstBullet = lines.findIndex(l => BULLET_LINE_RE.test(l));
+  const prefixLines = firstBullet === -1 ? lines : lines.slice(0, firstBullet);
+  const bulletLines = firstBullet === -1 ? [] : lines.slice(firstBullet);
+  const prefix = prefixLines.filter(Boolean).join(' ').trim();
+  const bullets = bulletLines
     .filter(Boolean)
-    .map(l => l.replace(/^[-*•]\s+|^\d+[.)]\s+/, '').trim())
+    .map(l => l.replace(BULLET_LINE_RE, '').trim())
     .filter(Boolean);
+  return { prefix, bullets };
 }
 
 // Matches a timestamp (or timestamp range) wrapped in square brackets.
@@ -945,7 +954,7 @@ function parseSummaryResponse(text) {
 const SUMMARY_STAMP_RE = /\[((\d{1,2}:\d{2}(?::\d{2})?)(?:\s*[–—-]\s*\d{1,2}:\d{2}(?::\d{2})?)?)\]/g;
 
 function renderSummary(text, { meta } = {}) {
-  const bullets = parseSummaryResponse(text);
+  const { prefix, bullets } = parseSummaryResponse(text);
   summaryContent.replaceChildren();
 
   // Optional "from 2h ago" caption above the list, used by the cache-restore
@@ -967,13 +976,25 @@ function renderSummary(text, { meta } = {}) {
     summaryContent.appendChild(note);
   }
 
-  const ul = document.createElement('ul');
-  for (const b of bullets) {
-    const li = document.createElement('li');
-    appendBulletWithStamps(li, b);
-    ul.appendChild(li);
+  // Prefix paragraph — present only when the user supplied "Extra focus" and
+  // the model wrote a direct answer above the bullets. Reuse the chip-aware
+  // appender so timestamp citations in the prefix are clickable too.
+  if (prefix) {
+    const p = document.createElement('p');
+    p.className = 'summary-prefix';
+    appendBulletWithStamps(p, prefix);
+    summaryContent.appendChild(p);
   }
-  summaryContent.appendChild(ul);
+
+  if (bullets.length) {
+    const ul = document.createElement('ul');
+    for (const b of bullets) {
+      const li = document.createElement('li');
+      appendBulletWithStamps(li, b);
+      ul.appendChild(li);
+    }
+    summaryContent.appendChild(ul);
+  }
 }
 
 // Parse a single bullet's text, splitting on [mm:ss] tokens. Each match becomes
@@ -1026,11 +1047,16 @@ summaryContent.addEventListener('click', (e) => {
   t.blur();
 });
 
-// Markdown payload for clipboard + Obsidian. Format: title, YouTube link, bullets.
+// Markdown payload for clipboard + Obsidian. Format: title, YouTube link,
+// optional prefix paragraph (when the user supplied an Extra focus request
+// and the model answered it above the bullets), then bullets.
 function buildMarkdownPayload() {
   const title = info.title || 'Untitled video';
-  const bullets = parseSummaryResponse(lastSummary);
-  return [`## ${title}`, pageUrl, '', bullets.map(b => `- ${b}`).join('\n')].join('\n') + '\n';
+  const { prefix, bullets } = parseSummaryResponse(lastSummary);
+  const lines = [`## ${title}`, pageUrl, ''];
+  if (prefix) lines.push(prefix, '');
+  lines.push(bullets.map(b => `- ${b}`).join('\n'));
+  return lines.join('\n') + '\n';
 }
 
 async function copySummary() {
@@ -1144,10 +1170,12 @@ async function saveToNotion() {
 }
 
 // Build Notion children blocks: heading with the title, paragraph with the
-// linked URL, then one bulleted_list_item per summary bullet.
+// linked URL, optional prefix paragraph (when the user's Extra focus
+// produced an answer above the bullets), then one bulleted_list_item per
+// summary bullet.
 function buildNotionBlocks() {
   const title = info.title || 'Untitled video';
-  const bullets = parseSummaryResponse(lastSummary);
+  const { prefix, bullets } = parseSummaryResponse(lastSummary);
   const blocks = [
     {
       object: 'block',
@@ -1164,6 +1192,16 @@ function buildNotionBlocks() {
       },
     },
   ];
+
+  if (prefix) {
+    blocks.push({
+      object: 'block',
+      type: 'paragraph',
+      paragraph: {
+        rich_text: [{ type: 'text', text: { content: prefix.slice(0, 1900) } }],
+      },
+    });
+  }
 
   for (const b of bullets) {
     blocks.push({
