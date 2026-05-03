@@ -86,10 +86,31 @@ async function initSettings() {
     await chrome.storage.local.remove('deepseekKey');
   }
 
+  // Per-key defaults shown in the field when storage has no override. For
+  // the system prompts this means the user can read exactly what we're about
+  // to send to their LLM provider — full transparency. Trade-off: once they
+  // edit, future updates to the default in code don't reach them; clearing
+  // the field reverts to the current default on next open.
+  const FIELD_DEFAULTS = {
+    llmProvider: DEFAULT_PROVIDER,
+    ytPrompt: SUMMARY_SYSTEM_PROMPT,
+    pagePrompt: PAGE_SUMMARY_SYSTEM_PROMPT,
+  };
+
   for (const [id, key] of SETTING_FIELDS) {
     const el = document.getElementById(id);
-    el.value = values[key] || (key === 'llmProvider' ? DEFAULT_PROVIDER : '');
-    el.addEventListener('change', async () => {
+    if (values[key]) {
+      el.value = values[key];
+    } else if (FIELD_DEFAULTS[key] !== undefined) {
+      // Programmatic .value assignment doesn't fire input/change, so this
+      // doesn't spuriously persist the default to storage.
+      el.value = FIELD_DEFAULTS[key];
+    }
+    // Prompt textareas live-persist on 'input' so users see their edits saved
+    // without needing to blur first. Empty value at summarise() time falls back
+    // to the built-in default — so clearing the field reverts on next open.
+    const isPrompt = key === 'ytPrompt' || key === 'pagePrompt';
+    el.addEventListener(isPrompt ? 'input' : 'change', async () => {
       // Await the write before refreshing the balance pill — refreshBalance
       // reads provider+key from storage, so a fire-and-forget set would race
       // and refetch with the previous credentials.
