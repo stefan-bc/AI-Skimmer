@@ -167,6 +167,11 @@ async function init() {
     pageUrl = tab.url;
     videoId = parsedUrl.searchParams.get('v') || '';
 
+    // Play/pause toggle works the moment we know we're on a YouTube tab,
+    // even if transcript extraction later fails (e.g. video has no captions).
+    // Revealing it here keeps it consistent with the spacebar shortcut.
+    playPauseBtn.hidden = false;
+
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       // MAIN world so the scroll-method monkey-patches inside scrapePage
@@ -192,8 +197,6 @@ async function init() {
     segCountEl.textContent = `${segments.length} segments`;
     transcriptPaneEl.hidden = false;
     controlsEl.hidden = false;
-    // Play/pause toggle is YouTube-only — page mode has no video to control.
-    playPauseBtn.hidden = false;
     setStatus('Ready.', 'ok');
     // Restore the last summary for this URL if we have one cached.
     restoreCachedSummary();
@@ -423,12 +426,16 @@ playPauseBtn.addEventListener('click', togglePlayPause);
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'Space') return;
   if (mode !== 'youtube') return;
+  // Ignore key auto-repeat — holding space would otherwise thrash the toggle
+  // dozens of times per second.
+  if (e.repeat) return;
   const t = e.target;
   const tag = (t?.tagName || '').toLowerCase();
-  // Skip text inputs (let space type a space) and buttons (let space trigger
-  // their native click — otherwise we'd toggle twice on the play-pause button
-  // itself, or hijack a focused timestamp chip's space-to-click).
-  if (tag === 'input' || tag === 'textarea' || tag === 'button' || t?.isContentEditable) return;
+  // Skip text inputs (let space type a space), selects (let space open the
+  // dropdown), and buttons (let space trigger their native click — otherwise
+  // we'd toggle twice on the play-pause button itself, or hijack a focused
+  // timestamp chip's space-to-click).
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || t?.isContentEditable) return;
   e.preventDefault();
   togglePlayPause();
 });
