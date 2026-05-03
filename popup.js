@@ -26,6 +26,7 @@ const copySummaryBtn = document.getElementById('copy-summary');
 const saveObsidianBtn = document.getElementById('save-obsidian');
 const saveNotionBtn = document.getElementById('save-notion');
 const settingsEl = document.getElementById('settings');
+const balanceEl = document.getElementById('balance');
 
 // Data + page context, populated in init().
 // `mode` flips between 'youtube' (transcript flow) and 'page' (summarise the
@@ -83,8 +84,12 @@ async function initSettings() {
   for (const [id, key] of SETTING_FIELDS) {
     const el = document.getElementById(id);
     el.value = values[key] || (key === 'llmProvider' ? DEFAULT_PROVIDER : '');
-    el.addEventListener('change', () => {
-      chrome.storage.local.set({ [key]: el.value.trim() });
+    el.addEventListener('change', async () => {
+      // Await the write before refreshing the balance pill — refreshBalance
+      // reads provider+key from storage, so a fire-and-forget set would race
+      // and refetch with the previous credentials.
+      await chrome.storage.local.set({ [key]: el.value.trim() });
+      if (key === 'llmProvider' || key === 'llmKey') refreshBalance({ force: true });
     });
   }
 
@@ -134,6 +139,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 init();
+refreshBalance();
 
 async function init() {
   try {
@@ -623,6 +629,9 @@ async function summarise() {
     // re-open it any time by clicking the Transcript row.
     transcriptPaneEl.open = false;
     setStatus(truncated ? 'Summary ready (input truncated).' : 'Summary ready.', 'ok');
+    // Just spent some tokens — refresh the DeepSeek balance pill so the user
+    // sees the cost they incurred. No-op for other providers.
+    refreshBalance({ force: true });
   } catch (e) {
     setStatus(`Summary failed: ${e.message}`, 'err');
   } finally {
@@ -909,6 +918,84 @@ function buildNotionBlocks() {
     });
   }
   return blocks;
+}
+
+// --------------------------------------------------------------------------
+// DeepSeek balance pill. Only DeepSeek exposes a public balance endpoint;
+// other providers don't, so the pill stays hidden for them. Cached for 60 s
+// in chrome.storage.local so reopening the popup doesn't hammer the endpoint.
+// --------------------------------------------------------------------------
+const BALANCE_TTL_MS = 60_000;     // 60 s cache freshness window
+const BAL_THRESH_LOW = 0.20;       // < 20¢ → red
+const BAL_THRESH_WARN = 0.50;      // 20–50¢ → amber; ≥ 50¢ → default colour
+
+async function refreshBalance({ force = false } = {}) {
+  const { llmProvider, llmKey, dsBalance } = await chrome.storage.local.get(
+    ['llmProvider', 'llmKey', 'dsBalance']
+  );
+  const provider = llmProvider || DEFAULT_PROVIDER;
+  const key = (llmKey || '').trim();
+
+  // Pill only makes sense for DeepSeek — hide otherwise.
+  if (provider !== 'deepseek' || !key) {
+    balanceEl.hidden = true;
+    return;
+  }
+
+  // Show cached value immediately if fresh and tied to the same key. Avoids a
+  // blank pill while the network round-trip is in flight.
+  const keyTag = key.slice(-6);
+  const cacheFresh = dsBalance
+    && dsBalance.keyTag === keyTag
+    && (Date.now() - dsBalance.ts) < BALANCE_TTL_MS;
+  if (cacheFresh && !force) {
+    renderBalance(dsBalance.amount, dsBalance.currency);
+    return;
+  }
+  if (dsBalance && dsBalance.keyTag === keyTag) {
+    // Render stale value while we refetch so the pill doesn't flicker empty.
+    renderBalance(dsBalance.amount, dsBalance.currency);
+  }
+
+  try {
+    const res = await fetch('https://api.deepseek.com/user/balance', {
+      headers: { 'Authorization': `Bearer ${key}`, 'Accept': 'application/json' },
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json();
+    // Prefer USD when present, otherwise the first listed currency entry.
+    const infos = Array.isArray(data?.balance_infos) ? data.balance_infos : [];
+    const pick = infos.find(b => (b.currency || '').toUpperCase() === 'USD') || infos[0];
+    if (!pick) throw new Error('no balance');
+    const amount = parseFloat(pick.total_balance);
+    const currency = (pick.currency || 'USD').toUpperCase();
+    if (!Number.isFinite(amount)) throw new Error('bad amount');
+
+    renderBalance(amount, currency);
+    await chrome.storage.local.set({
+      dsBalance: { amount, currency, keyTag, ts: Date.now() },
+    });
+  } catch (e) {
+    // Quiet failure — keep any stale value visible; if nothing to show, mute it.
+    if (balanceEl.hidden) {
+      balanceEl.hidden = false;
+      balanceEl.textContent = '—';
+      balanceEl.className = 'bal-err';
+    }
+  }
+}
+
+// USD shown with $; everything else falls back to a "12.34 CNY" form so the
+// thresholds (which are USD-shaped) don't silently mislead non-USD users.
+function renderBalance(amount, currency) {
+  balanceEl.hidden = false;
+  balanceEl.textContent = currency === 'USD'
+    ? `$${amount.toFixed(2)}`
+    : `${amount.toFixed(2)} ${currency}`;
+  let cls = '';
+  if (amount < BAL_THRESH_LOW) cls = 'bal-low';
+  else if (amount < BAL_THRESH_WARN) cls = 'bal-warn';
+  balanceEl.className = cls;
 }
 
 // --------------------------------------------------------------------------
