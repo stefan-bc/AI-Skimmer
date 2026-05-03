@@ -27,6 +27,7 @@ const saveObsidianBtn = document.getElementById('save-obsidian');
 const saveNotionBtn = document.getElementById('save-notion');
 const settingsEl = document.getElementById('settings');
 const balanceEl = document.getElementById('balance');
+const playPauseBtn = document.getElementById('play-pause-btn');
 
 // Data + page context, populated in init().
 // `mode` flips between 'youtube' (transcript flow) and 'page' (summarise the
@@ -191,6 +192,8 @@ async function init() {
     segCountEl.textContent = `${segments.length} segments`;
     transcriptPaneEl.hidden = false;
     controlsEl.hidden = false;
+    // Play/pause toggle is YouTube-only — page mode has no video to control.
+    playPauseBtn.hidden = false;
     setStatus('Ready.', 'ok');
     // Restore the last summary for this URL if we have one cached.
     restoreCachedSummary();
@@ -376,6 +379,55 @@ previewEl.addEventListener('click', (e) => {
   if (!t) return;
   const sec = Number(t.dataset.sec);
   if (Number.isFinite(sec)) seekVideo(sec);
+});
+
+// Toggle play/pause on the active YouTube tab without stealing focus from
+// the popup (so the popup stays open). Tries the YouTube player API first
+// — getPlayerState returns 1 when playing, anything else (paused, cued,
+// unstarted, buffering, ended) we treat as "should play". Falls back to
+// the raw <video> element if the player API isn't available yet.
+async function togglePlayPause() {
+  if (activeTabId == null) return;
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: activeTabId },
+      world: 'MAIN',
+      func: () => {
+        const player = document.getElementById('movie_player');
+        if (player && typeof player.getPlayerState === 'function') {
+          const state = player.getPlayerState();
+          if (state === 1) player.pauseVideo?.();
+          else player.playVideo?.();
+          return;
+        }
+        const v = document.querySelector('video.html5-main-video') || document.querySelector('video');
+        if (v) {
+          if (v.paused) v.play().catch(() => {});
+          else v.pause();
+        }
+      },
+    });
+  } catch (e) {
+    setStatus(`Toggle failed: ${e.message}`, 'err');
+  }
+}
+
+playPauseBtn.addEventListener('click', togglePlayPause);
+
+// Spacebar in the popup = play/pause, matching youtube.com's own shortcut.
+// Suppressed when the user is typing into a text input or the search box,
+// so spaces in "Extra focus", search, settings keys etc. work normally.
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space') return;
+  if (mode !== 'youtube') return;
+  const t = e.target;
+  const tag = (t?.tagName || '').toLowerCase();
+  // Skip text inputs (let space type a space) and buttons (let space trigger
+  // their native click — otherwise we'd toggle twice on the play-pause button
+  // itself, or hijack a focused timestamp chip's space-to-click).
+  if (tag === 'input' || tag === 'textarea' || tag === 'button' || t?.isContentEditable) return;
+  e.preventDefault();
+  togglePlayPause();
 });
 
 // Inject a tiny function into the page that moves the video's current time

@@ -480,6 +480,26 @@
   #balance.bal-low  { color: var(--error);   border-color: var(--error); }
   #balance.bal-err  { color: var(--base-muted); }
 
+  /* Play/pause toggle in the header — only revealed in YouTube mode after
+     a successful extraction. Visual weight matches the balance pill so the
+     header reads as one row of utilities. */
+  #play-pause-btn {
+    flex: none;
+    padding: 2px 7px;
+    font: 600 13px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: var(--base-content);
+    background: var(--base-300);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+  }
+  #play-pause-btn:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+
   /* Shortcut display inside Settings. */
   .shortcut-row {
     display: flex;
@@ -534,6 +554,9 @@
       <h1>Summary Tool</h1>
       <div id="videoTitle" class="sub" hidden></div>
     </div>
+    <!-- Toggles play/pause on the YouTube tab without closing the popup.
+         Hidden until a YouTube extraction succeeds (revealed in init()). -->
+    <button id="play-pause-btn" type="button" hidden title="Play / pause (or press space)">⏯</button>
     <!-- DeepSeek remaining-credit pill. Populated by refreshBalance() when
          the provider is DeepSeek; hidden otherwise. -->
     <div id="balance" hidden title="DeepSeek balance"></div>
