@@ -47,12 +47,6 @@
     color: var(--base-content);
     background: var(--base-100);
   }
-  /* Side-panel mode (popup.html?panel=1): drop the fixed width so the body
-     fills whatever width the user resizes the panel to. Keep the same
-     padding so the layout doesn't reflow against the edges. */
-  body.in-panel { width: 100%; max-width: none; min-height: 100vh; }
-  body.in-panel #preview { height: 220px; }
-  body.in-panel #summary-content { max-height: 320px; }
 
   /* Header: icon + product name + (once extracted) the video title. */
   header {
@@ -467,26 +461,6 @@
 
   [hidden] { display: none !important; }
 
-  /* Header-right "open as side panel" toggle. Mirrors the balance pill's
-     visual weight so the header reads as a single utility cluster. */
-  #side-panel-btn {
-    flex: none;
-    padding: 3px 7px;
-    font: 600 11px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-    color: var(--base-content);
-    background: var(--base-300);
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
-  }
-  #side-panel-btn:hover {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
-  }
-
   /* DeepSeek balance pill in the top-right of the header. Only shown when the
      configured provider is DeepSeek and a key is set. Colour shifts at the
      thresholds set in popup.js (red < $0.20, amber $0.20–$0.50, otherwise the
@@ -560,9 +534,6 @@
       <h1>Summary Tool</h1>
       <div id="videoTitle" class="sub" hidden></div>
     </div>
-    <!-- Open-in-side-panel toggle. Hidden when already running inside the
-         side panel (popup.html?panel=1) — see in-panel guard in popup.js. -->
-    <button id="side-panel-btn" type="button" title="Open in Chrome side panel" hidden>↗ Side panel</button>
     <!-- DeepSeek remaining-credit pill. Populated by refreshBalance() when
          the provider is DeepSeek; hidden otherwise. -->
     <div id="balance" hidden title="DeepSeek balance"></div>

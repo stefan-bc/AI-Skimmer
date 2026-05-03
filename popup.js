@@ -27,31 +27,6 @@ const saveObsidianBtn = document.getElementById('save-obsidian');
 const saveNotionBtn = document.getElementById('save-notion');
 const settingsEl = document.getElementById('settings');
 const balanceEl = document.getElementById('balance');
-const sidePanelBtn = document.getElementById('side-panel-btn');
-
-// Two contexts share popup.html: the toolbar-click popup, and the Chrome
-// side panel (manifest.side_panel.default_path = "popup.html?panel=1"). The
-// flag drives a wider layout (body.in-panel) and hides the "↗ Side panel"
-// button while already inside the panel.
-const inSidePanel = new URLSearchParams(location.search).get('panel') === '1';
-if (inSidePanel) {
-  document.body.classList.add('in-panel');
-} else {
-  // Only offer the side-panel toggle from the popup, where it makes sense.
-  sidePanelBtn.hidden = false;
-  sidePanelBtn.addEventListener('click', async () => {
-    try {
-      // chrome.sidePanel.open requires the active tab id and counts as a
-      // user gesture only when invoked synchronously from the click — so
-      // grab the tab first, then open immediately.
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id != null) await chrome.sidePanel.open({ tabId: tab.id });
-      window.close();
-    } catch (e) {
-      setStatus(`Side panel failed: ${e.message}`, 'err');
-    }
-  });
-}
 
 // Data + page context, populated in init().
 // `mode` flips between 'youtube' (transcript flow) and 'page' (summarise the
