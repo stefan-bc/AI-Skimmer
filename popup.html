@@ -366,10 +366,13 @@
   /* Visual category separators inside Settings. Each section is a <details>
      so it can collapse independently — keeps the popup quiet for users who
      only need to enter an API key. The "AI provider" section opens by
-     default; everything else stays closed until the user expands it. */
+     default; everything else stays closed until the user expands it.
+     Indented ~14px (matches the parent Settings caret + space) so each
+     subsection visually nests under the parent disclosure. */
   .settings-section {
     margin-top: 12px;
     padding-top: 10px;
+    padding-left: 14px;
     border-top: 1px solid var(--border);
   }
   .settings-section:first-of-type {
