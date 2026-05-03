@@ -65,16 +65,26 @@ TXT and preview share the same formatter (`buildText` → `effectiveSegments`), 
 
 ## How summary + save work
 
-- `summarise()` reads the persisted `llmProvider` / `llmModel` / `llmKey` and dispatches to `callLLM`, which routes by provider family:
-  - **`openai`** family (DeepSeek, OpenAI, OpenRouter, Groq) → `POST <baseUrl>/chat/completions` with `Authorization: Bearer <key>`.
-  - **`anthropic`** family (Claude) → `POST /v1/messages` with `x-api-key`, `anthropic-version: 2023-06-01`, and `anthropic-dangerous-direct-browser-access: true`.
-  - **`gemini`** family → `POST /v1beta/models/<model>:generateContent?key=<key>` with `system_instruction` + `contents`.
-- Transcript text is capped at 80k chars (`SUMMARY_INPUT_CAP`). System prompt asks for 5–7 plain bullets — no verdict, no rating, no headings.
+- `summarise()` reads the persisted `llmProvider` / `llmModel` / `llmKey` and dispatches to `streamLLM`, an async generator that yields text chunks as they arrive. The summary panel reveals immediately and re-renders on each chunk (debounced 50 ms) so bullets appear progressively rather than after a 5–10 s wait.
+  - **`openai`** family (DeepSeek, OpenAI, OpenRouter, Groq) → `POST <baseUrl>/chat/completions` with `stream: true`, `Authorization: Bearer <key>`. SSE format: `data: {…}\n\n`, terminated by `data: [DONE]`.
+  - **`anthropic`** family (Claude) → `POST /v1/messages` with `stream: true`, `x-api-key`, `anthropic-version: 2023-06-01`, and `anthropic-dangerous-direct-browser-access: true`. Text deltas live in `content_block_delta` events; other event types yield nothing.
+  - **`gemini`** family → `POST /v1beta/models/<model>:streamGenerateContent?alt=sse&key=<key>` (the `?alt=sse` flag is essential — without it Gemini returns a hard-to-parse JSON array).
+- A shared `parseSSE(body, extractor)` helper handles all three families: reads bytes, splits on `\n`, processes `data:` lines, JSON-parses each payload, and yields whatever the extractor returns.
+- Transcript text is capped at 80k chars (`SUMMARY_INPUT_CAP`). YouTube transcripts are sent **with** inline timestamps (`[m:ss] text`) so the model can cite specific moments. Page mode sends plain text. The cost overhead is ~10% tokens vs. plain transcript.
+- The YouTube system prompt asks the model to end relevant bullets with `[m:ss]` (or `[h:mm:ss]`); `appendBulletWithStamps` parses these out and renders each as a clickable `.t` chip that reuses `seekVideo()`. Page mode skips chip rendering. Out-of-range or malformed stamps fall back to plain text — guards against hallucinated timestamps.
 - Bullets are parsed by `parseSummaryResponse`, which strips bullet markers / numbering so the renderer applies its own list styling.
 - The shared markdown payload is `## <title>\n<youtube url>\n\n- bullet…` — used for both clipboard copy and Obsidian save.
 - Obsidian: opens `obsidian://adv-uri?vault=…&filepath=…&data=…&mode=append` via `chrome.tabs.create`. **Requires the Advanced URI community plugin** in the user's vault.
 - Notion: `PATCH https://api.notion.com/v1/blocks/<page_id>/children` with one `heading_2` (title) + `paragraph` (link) + N `bulleted_list_item` blocks. Page ID is normalised (dashes stripped). Notion-Version header pinned to `2022-06-28`.
 - One-time migration on first load: any prior `deepseekKey` storage value is moved to `llmKey` with `llmProvider: 'deepseek'`.
+
+## Per-URL summary cache
+
+Each successful `summarise()` writes the result to `summaryHistory` in `chrome.storage.local`, keyed by a normalised URL (YouTube watch pages keep just `?v=`; everything else uses `origin + pathname`, dropping query/hash so tracking params don't fragment the cache). Capped to the most recent 20 entries — older ones are evicted by timestamp. On popup open, `restoreCachedSummary()` looks up the current URL and renders the cached bullets with a small "Previous summary from Xm ago" caption above the list. Mode-checked: a YouTube cache entry won't restore in page mode and vice versa. The user clicks Summarise to refresh; the new summary overwrites the cache.
+
+## DeepSeek balance pill
+
+Top-right of the header. Only renders when the configured provider is DeepSeek and a key is set. Fetches `GET https://api.deepseek.com/user/balance` with `Authorization: Bearer <key>`, caches the result for 60 s in `chrome.storage.local` (key `dsBalance`), tagged with the last 6 chars of the API key so a key swap invalidates. Refreshes after each successful Summarise. Colour thresholds: red `< $0.20`, amber `$0.20 – $0.50`, default colour above. Quiet failure on network error — keeps any stale value visible. **Note:** this is the only outbound network call the extension makes without an explicit user click; the privacy section below documents this.
 
 ## Theme
 
@@ -86,5 +96,6 @@ See the "Pre-publish checklist" in `README.md` for the full list. Privacy story 
 
 - **Default (no AI settings configured):** zero network requests. Transcripts stay in the browser, prefs + credentials are local-only storage.
 - **With Summarise / Save configured:** transcript text is sent to the configured LLM provider host only on Summarise click; summary text is sent to `api.notion.com` only on Save to Notion click. Obsidian save uses the local `obsidian://` URL scheme — never hits the network.
+- **DeepSeek balance pill exception:** when the configured provider is DeepSeek, the popup makes one `GET https://api.deepseek.com/user/balance` call on open (cached 60 s) so the user can see remaining credit. Other providers don't expose a balance endpoint and therefore make no auto-call.
 
 The store listing must be honest about both tiers — frame the AI features as opt-in BYOK so the privacy posture stays a differentiator.

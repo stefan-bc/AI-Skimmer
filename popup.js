@@ -192,6 +192,8 @@ async function init() {
     transcriptPaneEl.hidden = false;
     controlsEl.hidden = false;
     setStatus('Ready.', 'ok');
+    // Restore the last summary for this URL if we have one cached.
+    restoreCachedSummary();
   } catch (e) {
     setStatus(`Error: ${e.message}`, 'err');
   }
@@ -224,6 +226,7 @@ function initPageMode(tab, parsedUrl) {
   extraPromptEl.placeholder = 'Extra focus (e.g. just the conclusion, or beginner-friendly takeaways)…';
 
   setStatus('Ready to summarise this page.', 'ok');
+  restoreCachedSummary();
 }
 
 // Schemes/hosts where chrome.scripting can't run. Used to fail fast in page
@@ -544,6 +547,7 @@ const SUMMARY_INPUT_CAP = 80000;
 const SUMMARY_SYSTEM_PROMPT =
   'You summarise YouTube video transcripts.\n\n' +
   'Output 5–7 concise bullet points covering the main topics, each prefixed with "- ".\n' +
+  'Where a bullet refers to a specific moment in the video, end the bullet with the timestamp in square brackets, e.g. "[2:45]" or "[1:12:30]". Use timestamps that appear in the supplied transcript only — never invent or guess.\n' +
   'No preamble, no closing remarks, no headings, no extra blank lines.';
 
 // Page-mode counterpart. Same shape (5–7 bullets) so the renderer + save
@@ -597,8 +601,10 @@ async function summarise() {
       systemBase = PAGE_SUMMARY_SYSTEM_PROMPT;
     } else {
       if (!segments.length) throw new Error('No transcript to summarise.');
-      // Plain text, no timestamps — gives the model more transcript per token.
-      inputText = segments.map(s => s.text).join(' ');
+      // Include timestamps inline so the model can cite the moment a point
+      // refers to (rendered as clickable chips by renderSummary). Adds ~10%
+      // tokens vs. plain text — worth it for the seek-from-summary feature.
+      inputText = segments.map(s => s.timestamp ? `[${s.timestamp}] ${s.text}` : s.text).join(' ');
       systemBase = SUMMARY_SYSTEM_PROMPT;
     }
 
@@ -615,20 +621,51 @@ async function summarise() {
       ? `Sending (truncated) ${subject} to ${provider.label}…`
       : `Sending ${subject} to ${provider.label}…`);
 
-    const summary = await callLLM({
+    // Stream chunks in. Reveal the summary panel and collapse the transcript
+    // straight away so the user sees text appear, not a frozen "Summarising…"
+    // button. Re-render is debounced (~50ms) to avoid hammering the DOM on
+    // fast streams (Groq can deliver hundreds of chunks per second).
+    summarySection.hidden = false;
+    transcriptPaneEl.open = false;
+    summaryContent.replaceChildren();
+
+    let accumulated = '';
+    let firstChunk = true;
+    let renderQueued = false;
+    const flushRender = () => {
+      renderQueued = false;
+      renderSummary(accumulated);
+    };
+    const scheduleRender = () => {
+      if (renderQueued) return;
+      renderQueued = true;
+      setTimeout(flushRender, 50);
+    };
+
+    for await (const chunk of streamLLM({
       providerKey,
       model: (stored.llmModel || '').trim(),
       apiKey,
       system: systemContent,
       user: inputText,
-    });
-    lastSummary = summary;
-    renderSummary(summary);
-    summarySection.hidden = false;
-    // Collapse the transcript pane so the summary takes the focus. User can
-    // re-open it any time by clicking the Transcript row.
-    transcriptPaneEl.open = false;
+    })) {
+      accumulated += chunk;
+      if (firstChunk) {
+        firstChunk = false;
+        setStatus(`Receiving from ${provider.label}…`);
+      }
+      scheduleRender();
+    }
+    // Final render — guarantees the last chunk lands even if the debounce
+    // timer hadn't fired yet.
+    renderSummary(accumulated);
+
+    if (!accumulated.trim()) throw new Error('Empty response');
+    lastSummary = accumulated;
+
     setStatus(truncated ? 'Summary ready (input truncated).' : 'Summary ready.', 'ok');
+    // Persist for next time the user opens the popup on this URL.
+    saveSummaryToHistory();
     // Just spent some tokens — refresh the DeepSeek balance pill so the user
     // sees the cost they incurred. No-op for other providers.
     refreshBalance({ force: true });
@@ -661,9 +698,12 @@ async function readPageText() {
   return result;
 }
 
-// Provider-agnostic LLM call. Routes by the provider's API family; each branch
-// is a self-contained adapter for that family's request/response shape.
-async function callLLM({ providerKey, model, apiKey, system, user, temperature = 0.3, maxTokens = 600 }) {
+// Provider-agnostic streaming LLM call. Yields text chunks as they arrive so
+// the summary can render progressively. All four providers expose SSE-style
+// streams: OpenAI-compatible (data lines + [DONE]), Anthropic
+// (content_block_delta events) and Gemini (?alt=sse mirrors the non-streaming
+// shape, one JSON object per event).
+async function* streamLLM({ providerKey, model, apiKey, system, user, temperature = 0.3, maxTokens = 600 }) {
   const provider = PROVIDERS[providerKey] || PROVIDERS[DEFAULT_PROVIDER];
   const useModel = model || provider.defaultModel;
 
@@ -673,13 +713,10 @@ async function callLLM({ providerKey, model, apiKey, system, user, temperature =
   };
 
   if (provider.family === 'openai') {
-    // OpenAI-compatible chat completions — covers DeepSeek, OpenAI, OpenRouter, Groq.
+    // OpenAI-compatible chat completions — DeepSeek, OpenAI, OpenRouter, Groq.
     const res = await fetch(`${provider.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: useModel,
         messages: [
@@ -688,13 +725,12 @@ async function callLLM({ providerKey, model, apiKey, system, user, temperature =
         ],
         temperature,
         max_tokens: maxTokens,
+        stream: true,
       }),
     });
     if (!res.ok) await fail(res);
-    const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content?.trim() || '';
-    if (!content) throw new Error('Empty response');
-    return content;
+    yield* parseSSE(res.body, (data) => data?.choices?.[0]?.delta?.content || '');
+    return;
   }
 
   if (provider.family === 'anthropic') {
@@ -713,18 +749,24 @@ async function callLLM({ providerKey, model, apiKey, system, user, temperature =
         max_tokens: maxTokens,
         system,
         messages: [{ role: 'user', content: user }],
+        stream: true,
       }),
     });
     if (!res.ok) await fail(res);
-    const data = await res.json();
-    const content = (data?.content || []).map(b => b?.text || '').join('').trim();
-    if (!content) throw new Error('Empty response');
-    return content;
+    // Anthropic emits multiple event types; only content_block_delta carries
+    // generated text. Other types (message_start, ping, message_delta) yield ''.
+    yield* parseSSE(res.body, (data) => {
+      if (data?.type === 'content_block_delta') return data?.delta?.text || '';
+      return '';
+    });
+    return;
   }
 
   if (provider.family === 'gemini') {
-    // Gemini — key in query string, separate system_instruction field.
-    const url = `${provider.baseUrl}/models/${encodeURIComponent(useModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    // Gemini's streaming endpoint mirrors the non-streaming shape per chunk
+    // when ?alt=sse is set. Without that flag it returns a JSON array — much
+    // harder to parse incrementally.
+    const url = `${provider.baseUrl}/models/${encodeURIComponent(useModel)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -735,14 +777,46 @@ async function callLLM({ providerKey, model, apiKey, system, user, temperature =
       }),
     });
     if (!res.ok) await fail(res);
-    const data = await res.json();
-    const content = (data?.candidates?.[0]?.content?.parts || [])
-      .map(p => p?.text || '').join('').trim();
-    if (!content) throw new Error('Empty response');
-    return content;
+    yield* parseSSE(res.body, (data) => {
+      const parts = data?.candidates?.[0]?.content?.parts || [];
+      return parts.map(p => p?.text || '').join('');
+    });
+    return;
   }
 
   throw new Error(`Unknown provider family: ${provider.family}`);
+}
+
+// Generic SSE reader. Pulls bytes off the response body, splits on newlines,
+// looks at "data:" lines only (the rest — "event:", blank lines, comments —
+// is metadata our extractors don't need). Each data payload is JSON-parsed
+// and handed to the provider-specific extractor, which returns the text
+// fragment to yield (or '' to skip).
+async function* parseSSE(body, extractText) {
+  if (!body) throw new Error('Stream has no body');
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, nl).trimEnd();
+      buffer = buffer.slice(nl + 1);
+      if (!line || !line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (payload === '[DONE]') return;
+      try {
+        const data = JSON.parse(payload);
+        const chunk = extractText(data);
+        if (chunk) yield chunk;
+      } catch {
+        // Malformed line — skip rather than abort the whole stream.
+      }
+    }
+  }
 }
 
 // Pull bullet lines out of the model response, stripping bullet markers /
@@ -756,17 +830,79 @@ function parseSummaryResponse(text) {
     .filter(Boolean);
 }
 
-function renderSummary(text) {
+// Matches a bare timestamp wrapped in square brackets — m:ss, mm:ss, h:mm:ss
+// or hh:mm:ss. Used to swap "[2:45]" tokens in summary bullets for clickable
+// chips that seek the video. Kept tight so we don't accidentally chip-ify
+// arbitrary bracketed text the model emits (e.g. "[Music]").
+const SUMMARY_STAMP_RE = /\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g;
+
+function renderSummary(text, { meta } = {}) {
   const bullets = parseSummaryResponse(text);
   summaryContent.replaceChildren();
+
+  // Optional "from 2h ago" caption above the list, used by the cache-restore
+  // path so the user knows they're looking at a previous run.
+  if (meta) {
+    const note = document.createElement('div');
+    note.className = 'summary-meta';
+    note.textContent = meta;
+    summaryContent.appendChild(note);
+  }
+
   const ul = document.createElement('ul');
   for (const b of bullets) {
     const li = document.createElement('li');
-    li.textContent = b;
+    appendBulletWithStamps(li, b);
     ul.appendChild(li);
   }
   summaryContent.appendChild(ul);
 }
+
+// Parse a single bullet's text, splitting on [mm:ss] tokens. Each match becomes
+// a button.t chip with data-sec; surrounding text is appended as plain nodes.
+// Page mode (no segments) skips chip-building so non-YouTube summaries don't
+// dangle un-clickable buttons. Out-of-range stamps (>video duration) also fall
+// back to plain text — guards against the model hallucinating timestamps.
+function appendBulletWithStamps(li, text) {
+  const canChip = mode === 'youtube' && segments.length > 0;
+  const durSec = info.duration ? parseStamp(info.duration) : 0;
+
+  let lastIdx = 0;
+  SUMMARY_STAMP_RE.lastIndex = 0;
+  let m;
+  while ((m = SUMMARY_STAMP_RE.exec(text)) !== null) {
+    if (m.index > lastIdx) {
+      li.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
+    }
+    const stamp = m[1];
+    const sec = parseStamp(stamp);
+    const validRange = sec > 0 && (durSec === 0 || sec <= durSec);
+    if (canChip && validRange) {
+      const btn = document.createElement('button');
+      btn.className = 't';
+      btn.type = 'button';
+      btn.textContent = stamp;
+      btn.dataset.sec = String(sec);
+      btn.title = 'Jump to this point in the video';
+      li.appendChild(btn);
+    } else {
+      li.appendChild(document.createTextNode(m[0]));
+    }
+    lastIdx = m.index + m[0].length;
+  }
+  if (lastIdx < text.length) {
+    li.appendChild(document.createTextNode(text.slice(lastIdx)));
+  }
+}
+
+// Delegated click handler — chips inside summary bullets share the same .t
+// shape as transcript-preview chips, so they reuse the same seekVideo path.
+summaryContent.addEventListener('click', (e) => {
+  const t = e.target.closest('.t');
+  if (!t) return;
+  const sec = Number(t.dataset.sec);
+  if (Number.isFinite(sec)) seekVideo(sec);
+});
 
 // Markdown payload for clipboard + Obsidian. Format: title, YouTube link, bullets.
 function buildMarkdownPayload() {
@@ -918,6 +1054,74 @@ function buildNotionBlocks() {
     });
   }
   return blocks;
+}
+
+// --------------------------------------------------------------------------
+// Per-URL summary cache. Last 20 summaries persist to chrome.storage.local
+// keyed by a normalised URL so the same video/page restores its previous
+// summary on popup open. Trims oldest entries when the cap is exceeded.
+// --------------------------------------------------------------------------
+const SUMMARY_HISTORY_CAP = 20;
+
+// Strip tracking junk so /watch?v=abc&utm_source=… and the bare URL don't
+// fragment the cache. YouTube watch pages keep just `?v=`; everything else
+// keeps origin + pathname (no query, no hash).
+function cacheKeyForUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl);
+    if (u.hostname === 'www.youtube.com' && u.pathname === '/watch') {
+      const v = u.searchParams.get('v');
+      return v ? `https://www.youtube.com/watch?v=${v}` : u.origin + u.pathname;
+    }
+    return u.origin + u.pathname;
+  } catch {
+    return rawUrl || '';
+  }
+}
+
+async function saveSummaryToHistory() {
+  if (!lastSummary || !pageUrl) return;
+  const key = cacheKeyForUrl(pageUrl);
+  if (!key) return;
+  const { summaryHistory = {} } = await chrome.storage.local.get('summaryHistory');
+  summaryHistory[key] = {
+    summary: lastSummary,
+    title: info.title || '',
+    ts: Date.now(),
+    mode,
+  };
+  // Cap to the most recent N entries. Sort by ts desc, keep the head.
+  const entries = Object.entries(summaryHistory)
+    .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0))
+    .slice(0, SUMMARY_HISTORY_CAP);
+  await chrome.storage.local.set({ summaryHistory: Object.fromEntries(entries) });
+}
+
+// Look up a cached summary for the current URL and render it. Called from the
+// end of init()/initPageMode() — segments (YouTube) are loaded by then, so
+// timestamp chips can validate against the actual transcript.
+async function restoreCachedSummary() {
+  if (!pageUrl) return;
+  const key = cacheKeyForUrl(pageUrl);
+  if (!key) return;
+  const { summaryHistory = {} } = await chrome.storage.local.get('summaryHistory');
+  const entry = summaryHistory[key];
+  if (!entry || !entry.summary) return;
+  // Only restore an entry that matches the current popup mode — a cached
+  // page summary on a YouTube URL would render without working chips.
+  if (entry.mode && entry.mode !== mode) return;
+
+  lastSummary = entry.summary;
+  renderSummary(entry.summary, { meta: `Previous summary from ${relativeTime(entry.ts)}` });
+  summarySection.hidden = false;
+}
+
+function relativeTime(ts) {
+  const sec = Math.floor((Date.now() - ts) / 1000);
+  if (sec < 60) return 'just now';
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  return `${Math.floor(sec / 86400)}d ago`;
 }
 
 // --------------------------------------------------------------------------
