@@ -57,6 +57,15 @@
   }
   header svg { width: 24px; height: 24px; flex: none; display: block; }
   .titles { flex: 1; min-width: 0; }
+  /* Right-side utility cluster (play/pause + DeepSeek balance). Tighter
+     internal gap than the parent header so the two chips read as one
+     anchored top-right unit, not as the tail of a flat row. */
+  .header-actions {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
   h1 {
     margin: 0;
     font-size: 13px;
@@ -507,7 +516,6 @@
      default text colour). */
   #balance {
     flex: none;
-    margin-left: 4px;
     padding: 3px 7px;
     font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
     color: var(--base-content);
@@ -594,12 +602,16 @@
       <h1>Summary Tool</h1>
       <div id="videoTitle" class="sub" hidden></div>
     </div>
-    <!-- Toggles play/pause on the YouTube tab without closing the popup.
-         Hidden until a YouTube extraction succeeds (revealed in init()). -->
-    <button id="play-pause-btn" type="button" hidden title="Play / pause (or press space)">⏯</button>
-    <!-- DeepSeek remaining-credit pill. Populated by refreshBalance() when
-         the provider is DeepSeek; hidden otherwise. -->
-    <div id="balance" hidden title="DeepSeek balance"></div>
+    <!-- Top-right utility cluster — play/pause toggle and DeepSeek balance.
+         Tighter internal spacing makes them read as a single anchored unit. -->
+    <div class="header-actions">
+      <!-- Toggles play/pause on the YouTube tab without closing the popup.
+           Hidden until a YouTube extraction succeeds (revealed in init()). -->
+      <button id="play-pause-btn" type="button" hidden title="Play / pause (or press space)">⏯</button>
+      <!-- DeepSeek remaining-credit pill. Populated by refreshBalance() when
+           the provider is DeepSeek; hidden otherwise. -->
+      <div id="balance" hidden title="DeepSeek balance"></div>
+    </div>
   </header>
 
   <!-- Loading / error / success line. -->
