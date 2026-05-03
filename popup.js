@@ -62,6 +62,10 @@ const SETTING_FIELDS = [
   ['set-provider',     'llmProvider'],
   ['set-llm-model',    'llmModel'],
   ['set-llm-key',      'llmKey'],
+  ['set-summary-temp', 'summaryTemp'],
+  ['set-summary-max',  'summaryMaxTokens'],
+  ['set-yt-prompt',    'ytPrompt'],
+  ['set-page-prompt',  'pagePrompt'],
   ['set-obs-vault',    'obsVault'],
   ['set-obs-path',     'obsPath'],
   ['set-notion-token', 'notionToken'],
@@ -630,10 +634,21 @@ saveObsidianBtn.addEventListener('click', saveToObsidian);
 saveNotionBtn.addEventListener('click', saveToNotion);
 
 async function summarise() {
-  const stored = await chrome.storage.local.get(['llmProvider', 'llmModel', 'llmKey', 'extraPrompt']);
+  const stored = await chrome.storage.local.get([
+    'llmProvider', 'llmModel', 'llmKey', 'extraPrompt',
+    'summaryTemp', 'summaryMaxTokens', 'ytPrompt', 'pagePrompt',
+  ]);
   const providerKey = stored.llmProvider || DEFAULT_PROVIDER;
   const provider = PROVIDERS[providerKey] || PROVIDERS[DEFAULT_PROVIDER];
   const apiKey = (stored.llmKey || '').trim();
+
+  // Resolve user-tuned sampling params, falling back to the defaults baked
+  // into streamLLM. parseFloat/parseInt return NaN on empty/invalid input,
+  // which Number.isFinite catches.
+  const tempNum = parseFloat(stored.summaryTemp);
+  const temperature = Number.isFinite(tempNum) ? tempNum : 0.3;
+  const maxNum = parseInt(stored.summaryMaxTokens, 10);
+  const maxTokens = Number.isFinite(maxNum) ? maxNum : 600;
 
   if (!apiKey) {
     setStatus(`Add a ${provider.label} API key in Settings first.`, 'err');
@@ -664,14 +679,15 @@ async function summarise() {
         videoTitleEl.hidden = false;
       }
       inputText = page.text;
-      systemBase = PAGE_SUMMARY_SYSTEM_PROMPT;
+      // User override wins; empty/whitespace falls back to the built-in default.
+      systemBase = (stored.pagePrompt || '').trim() || PAGE_SUMMARY_SYSTEM_PROMPT;
     } else {
       if (!segments.length) throw new Error('No transcript to summarise.');
       // Include timestamps inline so the model can cite the moment a point
       // refers to (rendered as clickable chips by renderSummary). Adds ~10%
       // tokens vs. plain text — worth it for the seek-from-summary feature.
       inputText = segments.map(s => s.timestamp ? `[${s.timestamp}] ${s.text}` : s.text).join(' ');
-      systemBase = SUMMARY_SYSTEM_PROMPT;
+      systemBase = (stored.ytPrompt || '').trim() || SUMMARY_SYSTEM_PROMPT;
     }
 
     const truncated = inputText.length > SUMMARY_INPUT_CAP;
@@ -714,6 +730,8 @@ async function summarise() {
       apiKey,
       system: systemContent,
       user: inputText,
+      temperature,
+      maxTokens,
     })) {
       accumulated += chunk;
       if (firstChunk) {

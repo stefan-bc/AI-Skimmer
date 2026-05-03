@@ -363,7 +363,10 @@
   #settings[open] summary::before { transform: rotate(90deg); }
   #settings summary:hover { color: var(--base-content); }
 
-  /* Visual category separators inside Settings. */
+  /* Visual category separators inside Settings. Each section is a <details>
+     so it can collapse independently — keeps the popup quiet for users who
+     only need to enter an API key. The "AI provider" section opens by
+     default; everything else stays closed until the user expands it. */
   .settings-section {
     margin-top: 12px;
     padding-top: 10px;
@@ -373,6 +376,32 @@
     margin-top: 8px;
     padding-top: 0;
     border-top: 0;
+  }
+  /* Collapse caret on each subsection's <summary>, mirroring the parent
+     #settings disclosure so the visual language is consistent. */
+  details.settings-section > summary {
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    padding: 2px 0;
+    display: flex;
+    align-items: center;
+  }
+  details.settings-section > summary::-webkit-details-marker { display: none; }
+  details.settings-section > summary::before {
+    content: '▸';
+    display: inline-block;
+    width: 12px;
+    margin-right: 4px;
+    color: var(--base-muted);
+    transition: transform 0.15s ease;
+  }
+  details.settings-section[open] > summary::before { transform: rotate(90deg); }
+  details.settings-section > summary > .settings-heading { margin: 0; }
+  details.settings-section > .settings-grid,
+  details.settings-section > .settings-hint,
+  details.settings-section > .shortcut-row {
+    margin-top: 8px;
   }
   .settings-heading {
     margin: 0 0 8px;
@@ -393,7 +422,8 @@
     color: var(--base-muted);
   }
   .settings-grid input,
-  .settings-grid select {
+  .settings-grid select,
+  .settings-grid textarea {
     padding: 5px 7px;
     font: 11px/1.3 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
     color: var(--base-content);
@@ -403,8 +433,15 @@
     outline: none;
     transition: border-color 0.12s ease, box-shadow 0.12s ease;
   }
+  .settings-grid textarea {
+    resize: vertical;
+    min-height: 50px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    line-height: 1.4;
+  }
   .settings-grid input:focus,
-  .settings-grid select:focus {
+  .settings-grid select:focus,
+  .settings-grid textarea:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 2px rgba(45, 82, 120, 0.30);
   }
@@ -625,8 +662,8 @@
   <details id="settings">
     <summary>Settings</summary>
 
-    <div class="settings-section">
-      <h4 class="settings-heading">AI provider</h4>
+    <details class="settings-section" open>
+      <summary><h4 class="settings-heading">AI provider</h4></summary>
       <div class="settings-grid">
         <label>
           <span>Provider</span>
@@ -648,10 +685,35 @@
           <input type="password" id="set-llm-key" autocomplete="off" spellcheck="false">
         </label>
       </div>
-    </div>
+    </details>
 
-    <div class="settings-section">
-      <h4 class="settings-heading">Save to Obsidian</h4>
+    <details class="settings-section">
+      <summary><h4 class="settings-heading">Summary tuning</h4></summary>
+      <div class="settings-grid">
+        <label>
+          <span>Temperature (0–2, lower = more deterministic)</span>
+          <input type="number" id="set-summary-temp" min="0" max="2" step="0.1" placeholder="0.3">
+        </label>
+        <label>
+          <span>Max output tokens</span>
+          <input type="number" id="set-summary-max" min="50" max="8000" step="50" placeholder="600">
+        </label>
+        <label>
+          <span>System prompt — YouTube mode</span>
+          <textarea id="set-yt-prompt" rows="4" placeholder="Leave empty for default" spellcheck="false"></textarea>
+        </label>
+        <label>
+          <span>System prompt — page mode</span>
+          <textarea id="set-page-prompt" rows="3" placeholder="Leave empty for default" spellcheck="false"></textarea>
+        </label>
+      </div>
+      <div class="settings-hint">
+        Empty fields use the built-in defaults. The "Extra focus" line still gets appended on top of whichever prompt is active.
+      </div>
+    </details>
+
+    <details class="settings-section">
+      <summary><h4 class="settings-heading">Save to Obsidian</h4></summary>
       <div class="settings-grid">
         <label>
           <span>Vault name</span>
@@ -662,10 +724,10 @@
           <input type="text" id="set-obs-path" autocomplete="off" spellcheck="false">
         </label>
       </div>
-    </div>
+    </details>
 
-    <div class="settings-section">
-      <h4 class="settings-heading">Save to Notion</h4>
+    <details class="settings-section">
+      <summary><h4 class="settings-heading">Save to Notion</h4></summary>
       <div class="settings-grid">
         <label>
           <span>Integration token</span>
@@ -676,10 +738,10 @@
           <input type="text" id="set-notion-page" autocomplete="off" spellcheck="false">
         </label>
       </div>
-    </div>
+    </details>
 
-    <div class="settings-section">
-      <h4 class="settings-heading">Keyboard shortcut</h4>
+    <details class="settings-section">
+      <summary><h4 class="settings-heading">Keyboard shortcut</h4></summary>
       <div class="shortcut-row">
         <span class="keys">
           <kbd>&#8984;</kbd>
@@ -691,7 +753,7 @@
       <div class="settings-hint" style="margin-top: 4px;">
         Rebind at <code>chrome://extensions/shortcuts</code>.
       </div>
-    </div>
+    </details>
 
     <div class="settings-hint">
       Obsidian append needs the <strong>Advanced URI</strong> community plugin.
