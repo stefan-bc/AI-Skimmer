@@ -295,10 +295,22 @@
   }
   /* Faint label shown above a restored-from-cache summary. */
   .summary-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin: 0 0 6px;
     font-size: 10px;
     color: var(--base-muted);
   }
+  .summary-meta button {
+    padding: 0;
+    font: inherit;
+    color: var(--secondary);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+  }
+  .summary-meta button:hover { color: var(--primary); text-decoration: underline; }
 
   .summary-actions { display: flex; flex-wrap: wrap; gap: 6px; }
   .summary-actions button {

@@ -841,11 +841,21 @@ function renderSummary(text, { meta } = {}) {
   summaryContent.replaceChildren();
 
   // Optional "from 2h ago" caption above the list, used by the cache-restore
-  // path so the user knows they're looking at a previous run.
+  // path so the user knows they're looking at a previous run. Includes a small
+  // refresh link that re-runs summarise() so the affordance is right there
+  // alongside the staleness signal.
   if (meta) {
     const note = document.createElement('div');
     note.className = 'summary-meta';
-    note.textContent = meta;
+    const label = document.createElement('span');
+    label.textContent = meta;
+    note.appendChild(label);
+    const refresh = document.createElement('button');
+    refresh.type = 'button';
+    refresh.textContent = '↻ refresh';
+    refresh.title = 'Re-summarise this page';
+    refresh.addEventListener('click', () => { if (!summarizeBtn.disabled) summarise(); });
+    note.appendChild(refresh);
     summaryContent.appendChild(note);
   }
 
