@@ -1169,7 +1169,7 @@ async function saveToNotion() {
 }
 
 // Build Notion children blocks: heading with the title, paragraph with the
-// linked URL, optional prefix paragraph (when the user's Extra focus
+// linked URL, optional prefix paragraph (when the user's Custom instruction
 // produced an answer above the bullets), then one bulleted_list_item per
 // summary bullet.
 function buildNotionBlocks() {
