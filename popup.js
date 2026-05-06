@@ -1,4 +1,4 @@
-// Summary Tool — popup controller.
+// Skimmer — popup controller.
 // Extracts transcript on open, renders a segmented preview with clickable
 // timestamps, and exposes copy, TXT/SRT download, search filter, and a
 // "strip non-speech" toggle.
@@ -1125,7 +1125,6 @@ async function saveToObsidian() {
 // opened via chrome.tabs.create count as fresh nav and re-prompt every time.
 // Side effect: the popup unloads as Obsidian takes focus.
 function triggerScheme(uri) {
-  console.log('[Summary Tool] Dispatching URI:', uri);
   const a = document.createElement('a');
   a.href = uri;
   document.body.appendChild(a);

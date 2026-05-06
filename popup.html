@@ -472,6 +472,22 @@
     margin-top: 6px;
   }
 
+  /* Footer row — sits under everything, right-aligned support link. */
+  .footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .footer a {
+    font-size: 10px;
+    color: var(--base-muted);
+    text-decoration: none;
+    letter-spacing: 0.02em;
+  }
+  .footer a:hover { color: var(--accent); }
+
   /* Per-transcript controls (toggles + downloads) tucked under the preview
      inside the transcript disclosure. Subtle divider keeps them separate
      from the segment list above. */
@@ -607,7 +623,7 @@
       <rect x="14.4" y="30.85" width="14.4" height="4.3" rx="2.15" ry="2.15" fill="#DDDDE1"/>
     </svg>
     <div class="titles">
-      <h1>Summary Tool</h1>
+      <h1>Skimmer</h1>
       <div id="videoTitle" class="sub" hidden></div>
     </div>
     <!-- Top-right utility cluster — play/pause toggle and DeepSeek balance.
@@ -788,6 +804,11 @@
       All values are stored locally; nothing syncs.
     </div>
   </details>
+
+  <!-- Support link, anchored bottom-right of the popup. -->
+  <div class="footer">
+    <a href="https://buymeacoffee.com/stefanvca" target="_blank" rel="noreferrer noopener">Buy me a coffee</a>
+  </div>
 
   <script src="popup.js"></script>
 </body>

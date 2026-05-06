@@ -1,4 +1,4 @@
-# Summary Tool
+# Skimmer
 
 Chrome extension for grabbing YouTube video transcripts — searchable preview, clickable timestamps, copy to clipboard, download as TXT / SRT. Open the popup on any other web page and it switches to a one-click **Summarise** action that runs the page's main text through your own AI key.
 
