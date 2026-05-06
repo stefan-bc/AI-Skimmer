@@ -447,7 +447,7 @@ playPauseBtn.addEventListener('click', togglePlayPause);
 
 // Spacebar in the popup = play/pause, matching youtube.com's own shortcut.
 // Suppressed when the user is typing into a text input or the search box,
-// so spaces in "Extra focus", search, settings keys etc. work normally.
+// so spaces in "Custom instruction", search, settings keys etc. work normally.
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'Space') return;
   if (mode !== 'youtube') return;
@@ -927,7 +927,7 @@ async function* parseSSE(body, extractText) {
 // Split the model response into an optional prose prefix and the bullet list.
 // Lines that start with a bullet marker / numbered list go into bullets;
 // everything before the first such line becomes the prefix paragraph (used
-// when the user added an "Extra focus" request and we asked the model to
+// when the user added an "Custom instruction" request and we asked the model to
 // answer it briefly before the bullets). Bullet markers are stripped so the
 // renderer applies its own list styling.
 const BULLET_LINE_RE = /^[-*•]\s+|^\d+[.)]\s+/;
@@ -976,7 +976,7 @@ function renderSummary(text, { meta } = {}) {
     summaryContent.appendChild(note);
   }
 
-  // Prefix paragraph — present only when the user supplied "Extra focus" and
+  // Prefix paragraph — present only when the user supplied "Custom instruction" and
   // the model wrote a direct answer above the bullets. Reuse the chip-aware
   // appender so timestamp citations in the prefix are clickable too.
   if (prefix) {
@@ -1048,7 +1048,7 @@ summaryContent.addEventListener('click', (e) => {
 });
 
 // Markdown payload for clipboard + Obsidian. Format: title, YouTube link,
-// optional prefix paragraph (when the user supplied an Extra focus request
+// optional prefix paragraph (when the user supplied a Custom instruction request
 // and the model answered it above the bullets), then bullets.
 function buildMarkdownPayload() {
   const title = info.title || 'Untitled video';
