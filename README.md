@@ -14,7 +14,7 @@ Chrome extension for grabbing YouTube video transcripts — searchable preview, 
 - **Dark mode** — follows the OS preference automatically.
 - Preferences and API credentials persist between opens (locally, never synced).
 
-## Install (macOS)
+## Install
 
 1. Open `chrome://extensions`.
 2. Toggle **Developer mode** (top right).
@@ -92,20 +92,6 @@ If you don't configure any AI features, the extension makes zero network request
 - Extraction reads captions from YouTube's player response directly — no panel toggling, no DOM scraping, no scroll movement (even in theatre mode).
 - YouTube occasionally renames DOM classes; if extraction breaks, inspect the transcript panel and update the selectors in `popup.js`.
 - The "Show transcript" button is matched by English aria-label/text. Localised YouTube UIs (non-English) may report "no captions" even when captions are present — international support is a known gap.
-
-## Pre-publish checklist (Chrome Web Store)
-
-- [ ] Host the privacy statement (see **Privacy** section above) as a public URL — e.g. GitHub Pages — and paste the link into the store listing.
-- [ ] Short description under 132 characters (matches `manifest.json` "description").
-- [ ] 3–5 screenshots at 1280×800 showing: preview pane, clickable timestamps, search, strip-noise toggle.
-- [ ] Category: **Productivity**.
-- [ ] Single purpose justification: "Extract YouTube transcripts, or summarise the active web page, with the user's own AI key."
-- [ ] Permissions justification:
-  - `activeTab` — read the active tab (YouTube transcript or page text) when the user clicks the icon.
-  - `scripting` — inject the transcript scraper, the video-seek function, and (in page mode) the one-shot page-text reader.
-  - `storage` — persist UI toggle preferences and (user-supplied) API credentials locally.
-  - `host_permissions` for `api.deepseek.com`, `api.openai.com`, `api.anthropic.com`, `openrouter.ai`, `api.groq.com`, `generativelanguage.googleapis.com` — opt-in BYOK summary endpoints. Each is called only when the user has configured that provider and clicks **Summarise**; only one host is hit per click.
-  - `host_permissions` for `api.notion.com` — opt-in **Save to Notion**, called only when the user clicks that button with a configured token + page.
 
 ## Update
 
