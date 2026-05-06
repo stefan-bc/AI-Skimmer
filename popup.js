@@ -254,7 +254,7 @@ function initPageMode(tab, parsedUrl) {
   // becomes the sole primary action; the transcript pane stays collapsed.
   copyBtn.hidden = true;
   controlsEl.hidden = false;
-  extraPromptEl.placeholder = 'Custom instruction (e.g. focus on the conclusion)…';
+  extraPromptEl.placeholder = 'Custom instruction…';
 
   setStatus('Ready to summarise this page.', 'ok');
   restoreCachedSummary();
