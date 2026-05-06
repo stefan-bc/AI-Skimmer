@@ -60,4 +60,4 @@ If you don't configure any AI provider and don't enter any keys, Skimmer makes *
 
 ## Contact
 
-Bug reports or privacy questions: <stefan.bicanic@gmail.com>
+Bug reports or privacy questions: <stefanbc9@gmail.com>
