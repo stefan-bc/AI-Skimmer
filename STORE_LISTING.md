@@ -110,15 +110,15 @@ Confirm **"I do not use or transfer user data to determine creditworthiness or f
 
 ## Homepage URL
 
-`<PASTE GITHUB REPO URL — e.g. https://github.com/stefan-bc/skimmer>`
+`https://github.com/stefan-bc/Skimmer`
 
 ---
 
 ## Privacy policy URL
 
-`<PASTE GITHUB PAGES URL TO PRIVACY.md — e.g. https://stefan-bc.github.io/skimmer/PRIVACY.html>`
+`<PASTE GITHUB PAGES URL TO PRIVACY.md — e.g. https://stefan-bc.github.io/Skimmer/PRIVACY.html>`
 
-(Hosting tip: enable GitHub Pages on the repo, set source to `main` / root. The raw `PRIVACY.md` URL also works as a stopgap, but a rendered HTML page reads more professional to the reviewer.)
+(Hosting tip: enable GitHub Pages on the repo (Settings → Pages → Source: main, root). GitHub Pages URLs are case-sensitive, so the path must be `/Skimmer/`. The raw `PRIVACY.md` URL on github.com works as a stopgap but a rendered HTML page reads more professional to the reviewer.)
 
 ---
 
@@ -148,7 +148,7 @@ Skip on first submission. Add later if you want a chance at the carousel.
 ## Pre-submit checklist
 
 - [ ] $5 dev fee paid on Chrome Web Store (one-time, lifetime).
-- [ ] Public repo pushed to GitHub (and GitLab via your dual-remote setup).
+- [ ] Public repo pushed to GitHub.
 - [ ] GitHub Pages enabled, `PRIVACY.md` reachable at a public URL.
 - [ ] Web Store search for existing "Skimmer" extensions — fall back to "Skimmer Reader" or "Skimmer for YouTube" if a major collision exists.
 - [ ] Test the unpacked extension end-to-end on a YouTube page and on a generic article.

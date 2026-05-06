@@ -354,6 +354,12 @@
     color: var(--base-muted);
   }
 
+  /* Wrapper around the Settings disclosure so the utility cluster (GitHub +
+     tip jar) can sit on the same line as the "Settings" summary AND stay
+     visible when the disclosure is collapsed (siblings of <details>, not
+     children — children get hidden by the browser when closed). */
+  .settings-row { position: relative; }
+
   /* Collapsible settings — always visible (outside #controls) so users can
      configure keys before extraction succeeds. */
   #settings {
@@ -472,21 +478,27 @@
     margin-top: 6px;
   }
 
-  /* Footer row — sits under everything, right-aligned support link. */
-  .footer {
+  /* Tiny utility cluster (GitHub + tip jar) anchored to the top-right of the
+     Settings row. Sits as a sibling of the <details> so it stays visible even
+     when the disclosure is collapsed. Top offset is tuned so icon centres line
+     up with the x-height of "Settings" (lowercase visual centre, not the
+     full line-box centre). */
+  .settings-utility {
+    position: absolute;
+    top: 19px;
+    right: 0;
     display: flex;
-    justify-content: flex-end;
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px solid var(--border);
+    align-items: center;
+    gap: 8px;
   }
-  .footer a {
-    font-size: 10px;
+  .settings-utility a {
+    display: inline-flex;
+    align-items: center;
     color: var(--base-muted);
-    text-decoration: none;
-    letter-spacing: 0.02em;
+    transition: color 0.1s ease;
   }
-  .footer a:hover { color: var(--accent); }
+  .settings-utility a:hover { color: var(--accent); }
+  .settings-utility svg { width: 14px; height: 14px; display: block; }
 
   /* Per-transcript controls (toggles + downloads) tucked under the preview
      inside the transcript disclosure. Subtle divider keeps them separate
@@ -697,9 +709,12 @@
     </div>
   </details>
 
-  <!-- Always-visible config so keys can be set before any extraction. -->
-  <details id="settings">
-    <summary>Settings</summary>
+  <!-- Always-visible config so keys can be set before any extraction.
+       Wrapper holds the support icon cluster as a sibling so the icons stay
+       on screen even when the Settings disclosure is collapsed. -->
+  <div class="settings-row">
+    <details id="settings">
+      <summary>Settings</summary>
 
     <details class="settings-section" open>
       <summary><h4 class="settings-heading">AI provider</h4></summary>
@@ -805,9 +820,24 @@
     </div>
   </details>
 
-  <!-- Support link, anchored bottom-right of the popup. -->
-  <div class="footer">
-    <a href="https://buymeacoffee.com/stefanvca" target="_blank" rel="noreferrer noopener">Buy me a coffee</a>
+    <!-- Support links — sibling of the <details> so they stay visible whether
+         the disclosure is open or closed. Both open in a new tab. -->
+    <div class="settings-utility">
+      <a href="https://github.com/stefan-bc/Skimmer" target="_blank" rel="noreferrer noopener" title="View source on GitHub" aria-label="View source on GitHub">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+        </svg>
+      </a>
+      <a href="https://buymeacoffee.com/stefanvca" target="_blank" rel="noreferrer noopener" title="Buy me a coffee" aria-label="Buy me a coffee">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M17 8h1a4 4 0 0 1 0 8h-1"/>
+          <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/>
+          <line x1="6" y1="2" x2="6" y2="4"/>
+          <line x1="10" y1="2" x2="10" y2="4"/>
+          <line x1="14" y1="2" x2="14" y2="4"/>
+        </svg>
+      </a>
+    </div>
   </div>
 
   <script src="popup.js"></script>
