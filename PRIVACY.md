@@ -1,20 +1,20 @@
-# Skimmer — Privacy Policy
+# AI Skimmer — Privacy Policy
 
 _Last updated: 2026-05-06_
 
-Skimmer is a Chrome extension that extracts YouTube transcripts and, optionally, summarises the active web page through an AI provider you supply your own API key for. This document explains exactly what data the extension touches and where it goes.
+AI Skimmer is a Chrome extension that extracts YouTube transcripts and, optionally, summarises the active web page through an AI provider you supply your own API key for. This document explains exactly what data the extension touches and where it goes.
 
 ## What stays on your device
 
 - **Transcripts and page text.** Read directly from the active tab via `chrome.scripting`. Never written to any server we control.
-- **Preferences and credentials.** UI toggles, the configured AI provider, model name, API key, Obsidian vault settings, and Notion integration token are stored in `chrome.storage.local`. Local-device only — not synced across browsers, not transmitted anywhere by Skimmer.
+- **Preferences and credentials.** UI toggles, the configured AI provider, model name, API key, Obsidian vault settings, and Notion integration token are stored in `chrome.storage.local`. Local-device only — not synced across browsers, not transmitted anywhere by AI Skimmer.
 - **Per-URL summary cache.** The most recent 20 summaries are kept locally so you can reopen the popup on a previously-summarised page and see the result without re-running the AI call. Eviction is by recency.
 
 No analytics, no telemetry, no third-party SDKs, no remote code.
 
 ## What leaves your device, and only when
 
-Skimmer only makes network requests on **explicit user action**, with two narrow exceptions documented at the end of this section.
+AI Skimmer only makes network requests on **explicit user action**, with two narrow exceptions documented at the end of this section.
 
 | Action | Endpoint | Sent | Trigger |
 |---|---|---|---|
@@ -39,15 +39,15 @@ If — and only if — your configured provider is DeepSeek and you have set an 
 
 ## What we never do
 
-- Skimmer does not collect, log, or transmit any personally identifiable information.
-- Skimmer does not sell or share data with third parties.
-- Skimmer does not run any background scripts or service workers.
-- Skimmer does not include or load any remote code.
-- Skimmer does not use or transmit data for advertising or creditworthiness purposes.
+- AI Skimmer does not collect, log, or transmit any personally identifiable information.
+- AI Skimmer does not sell or share data with third parties.
+- AI Skimmer does not run any background scripts or service workers.
+- AI Skimmer does not include or load any remote code.
+- AI Skimmer does not use or transmit data for advertising or creditworthiness purposes.
 
 ## Default privacy posture
 
-If you don't configure any AI provider and don't enter any keys, Skimmer makes **zero** outbound network requests beyond reading the active tab's own data. Transcript extraction, search, copy, and TXT/SRT download all run entirely on your device.
+If you don't configure any AI provider and don't enter any keys, AI Skimmer makes **zero** outbound network requests beyond reading the active tab's own data. Transcript extraction, search, copy, and TXT/SRT download all run entirely on your device.
 
 ## Permissions justification
 
