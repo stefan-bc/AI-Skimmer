@@ -471,6 +471,18 @@
     border-color: var(--primary);
     box-shadow: 0 0 0 2px rgba(45, 82, 120, 0.30);
   }
+  /* Transient highlight applied when the user clicks an action that needs a
+     field they haven't filled in yet — guides their eye to the right spot. */
+  .settings-grid input.attention,
+  .settings-grid select.attention,
+  .settings-grid textarea.attention {
+    border-color: var(--warning);
+    animation: attention-pulse 1.4s ease-in-out 2;
+  }
+  @keyframes attention-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(181, 144, 82, 0); }
+    50%      { box-shadow: 0 0 0 4px rgba(181, 144, 82, 0.45); }
+  }
   .settings-hint {
     font-size: 10px;
     color: var(--base-muted);

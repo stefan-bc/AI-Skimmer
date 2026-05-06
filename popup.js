@@ -276,6 +276,27 @@ function setStatus(text, cls = '') {
   statusEl.className = cls;
 }
 
+// Open the Settings disclosure (and any nested ones), focus the named field,
+// scroll it into view, and pulse the .attention highlight so the user can
+// spot it immediately. Used by the "you forgot to set X" error paths.
+function flagSettingsField(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Walk up and open every ancestor <details> so the field is actually shown.
+  let p = el.parentElement;
+  while (p) {
+    if (p.tagName === 'DETAILS') p.open = true;
+    p = p.parentElement;
+  }
+  // Defer focus + scroll one frame so the disclosure layout has settled.
+  requestAnimationFrame(() => {
+    el.focus({ preventScroll: true });
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.classList.add('attention');
+    setTimeout(() => el.classList.remove('attention'), 2800);
+  });
+}
+
 // Translate scrape error codes into friendlier messages. Unknown codes fall
 // through to the raw string so we don't silently swallow anything.
 function handleScrapeError(result) {
@@ -672,8 +693,15 @@ async function summarise() {
   const maxTokens = Number.isFinite(maxNum) ? maxNum : 600;
 
   if (!apiKey) {
-    setStatus(`Add a ${provider.label} API key in Settings first.`, 'err');
-    settingsEl.open = true;
+    // Only name the provider if the user has explicitly picked one — otherwise
+    // we'd be telling first-time users "add a DeepSeek key" when they may want
+    // a different provider. `stored.llmProvider` is undefined when nothing's
+    // been chosen and we fell back to DEFAULT_PROVIDER.
+    const msg = stored.llmProvider
+      ? `Add a ${provider.label} API key in Settings first.`
+      : 'Pick a provider and add an API key in Settings.';
+    setStatus(msg, 'err');
+    flagSettingsField('set-llm-key');
     return;
   }
 
@@ -1096,7 +1124,7 @@ async function saveToObsidian() {
 
   if (!obsVault || !obsPath) {
     setStatus('Set Obsidian vault and file path in Settings.', 'err');
-    settingsEl.open = true;
+    flagSettingsField(obsVault ? 'set-obs-path' : 'set-obs-vault');
     return;
   }
 
@@ -1137,7 +1165,7 @@ async function saveToNotion() {
   const { notionToken, notionPage } = await chrome.storage.local.get(['notionToken', 'notionPage']);
   if (!notionToken || !notionPage) {
     setStatus('Set Notion token and page ID in Settings.', 'err');
-    settingsEl.open = true;
+    flagSettingsField(notionToken ? 'set-notion-page' : 'set-notion-token');
     return;
   }
 
