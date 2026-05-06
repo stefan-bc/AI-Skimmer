@@ -561,6 +561,9 @@ searchEl.addEventListener('input', () => {
 
 // Copy handler: clipboard write + brief visual confirmation on the button.
 copyBtn.addEventListener('click', async () => {
+  // Collapse Settings if the user had it open — once they're acting, the panel
+  // is just visual noise above the result.
+  settingsEl.open = false;
   try {
     const text = buildText(stampsEl.checked);
     await navigator.clipboard.writeText(text);
@@ -676,6 +679,10 @@ saveObsidianBtn.addEventListener('click', saveToObsidian);
 saveNotionBtn.addEventListener('click', saveToNotion);
 
 async function summarise() {
+  // Collapse Settings on action start so the summary has room. If a required
+  // field is missing, flagSettingsField() below re-opens the panel and points
+  // the user at the right input.
+  settingsEl.open = false;
   const stored = await chrome.storage.local.get([
     'llmProvider', 'llmModel', 'llmKey', 'extraPrompt',
     'summaryTemp', 'summaryMaxTokens', 'ytPrompt', 'pagePrompt',
