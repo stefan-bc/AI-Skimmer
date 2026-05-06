@@ -1,4 +1,4 @@
-// AI Skimmer — popup controller.
+// Summary Toolbox — popup controller.
 // Extracts transcript on open, renders a segmented preview with clickable
 // timestamps, and exposes copy, TXT/SRT download, search filter, and a
 // "strip non-speech" toggle.
