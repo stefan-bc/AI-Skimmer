@@ -847,84 +847,103 @@ async function* streamLLM({ providerKey, model, apiKey, system, user, temperatur
   const provider = PROVIDERS[providerKey] || PROVIDERS[DEFAULT_PROVIDER];
   const useModel = model || provider.defaultModel;
 
+  // Abort if the server hasn't started responding within 20 s. Cleared as soon
+  // as fetch() resolves (headers received) — the streaming phase after that is
+  // fast. Without this, a slow/unresponsive provider hangs the popup silently.
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 20_000);
+
   const fail = async (res) => {
     const t = await res.text().catch(() => '');
     throw new Error(`${provider.label} ${res.status}${t ? ': ' + t.slice(0, 200) : ''}`);
   };
 
-  if (provider.family === 'openai') {
-    // OpenAI-compatible chat completions — DeepSeek, OpenAI, OpenRouter, Groq.
-    const res = await fetch(`${provider.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: useModel,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        temperature,
-        max_tokens: maxTokens,
-        stream: true,
-      }),
-    });
-    if (!res.ok) await fail(res);
-    yield* parseSSE(res.body, (data) => data?.choices?.[0]?.delta?.content || '');
-    return;
-  }
+  try {
+    if (provider.family === 'openai') {
+      // OpenAI-compatible chat completions — DeepSeek, OpenAI, OpenRouter, Groq.
+      const res = await fetch(`${provider.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: useModel,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user },
+          ],
+          temperature,
+          max_tokens: maxTokens,
+          stream: true,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(tid);
+      if (!res.ok) await fail(res);
+      yield* parseSSE(res.body, (data) => data?.choices?.[0]?.delta?.content || '');
+      return;
+    }
 
-  if (provider.family === 'anthropic') {
-    // Anthropic Messages API — separate `system` field, x-api-key auth, and
-    // the dangerous-direct-browser-access opt-in for non-server callers.
-    const res = await fetch(`${provider.baseUrl}/v1/messages`, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: useModel,
-        max_tokens: maxTokens,
-        system,
-        messages: [{ role: 'user', content: user }],
-        stream: true,
-      }),
-    });
-    if (!res.ok) await fail(res);
-    // Anthropic emits multiple event types; only content_block_delta carries
-    // generated text. Other types (message_start, ping, message_delta) yield ''.
-    yield* parseSSE(res.body, (data) => {
-      if (data?.type === 'content_block_delta') return data?.delta?.text || '';
-      return '';
-    });
-    return;
-  }
+    if (provider.family === 'anthropic') {
+      // Anthropic Messages API — separate `system` field, x-api-key auth, and
+      // the dangerous-direct-browser-access opt-in for non-server callers.
+      const res = await fetch(`${provider.baseUrl}/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: useModel,
+          max_tokens: maxTokens,
+          system,
+          messages: [{ role: 'user', content: user }],
+          stream: true,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(tid);
+      if (!res.ok) await fail(res);
+      // Anthropic emits multiple event types; only content_block_delta carries
+      // generated text. Other types (message_start, ping, message_delta) yield ''.
+      yield* parseSSE(res.body, (data) => {
+        if (data?.type === 'content_block_delta') return data?.delta?.text || '';
+        return '';
+      });
+      return;
+    }
 
-  if (provider.family === 'gemini') {
-    // Gemini's streaming endpoint mirrors the non-streaming shape per chunk
-    // when ?alt=sse is set. Without that flag it returns a JSON array — much
-    // harder to parse incrementally.
-    const url = `${provider.baseUrl}/models/${encodeURIComponent(useModel)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [{ text: user }] }],
-        generationConfig: { temperature, maxOutputTokens: maxTokens },
-      }),
-    });
-    if (!res.ok) await fail(res);
-    yield* parseSSE(res.body, (data) => {
-      const parts = data?.candidates?.[0]?.content?.parts || [];
-      return parts.map(p => p?.text || '').join('');
-    });
-    return;
-  }
+    if (provider.family === 'gemini') {
+      // Gemini's streaming endpoint mirrors the non-streaming shape per chunk
+      // when ?alt=sse is set. Without that flag it returns a JSON array — much
+      // harder to parse incrementally.
+      const url = `${provider.baseUrl}/models/${encodeURIComponent(useModel)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: system }] },
+          contents: [{ role: 'user', parts: [{ text: user }] }],
+          generationConfig: { temperature, maxOutputTokens: maxTokens },
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(tid);
+      if (!res.ok) await fail(res);
+      yield* parseSSE(res.body, (data) => {
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+        return parts.map(p => p?.text || '').join('');
+      });
+      return;
+    }
 
-  throw new Error(`Unknown provider family: ${provider.family}`);
+    throw new Error(`Unknown provider family: ${provider.family}`);
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error(`${provider.label} didn't respond within 20 s — try again.`);
+    throw e;
+  } finally {
+    clearTimeout(tid);
+  }
 }
 
 // Generic SSE reader. Pulls bytes off the response body, splits on newlines,
